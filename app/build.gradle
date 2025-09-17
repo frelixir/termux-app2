@@ -259,3 +259,31 @@ afterEvaluate {
         variant.javaCompileProvider.get().dependsOn(downloadBootstraps)
     }
 }
+task exportAllResolvedDeps {
+    def exportDir = "${rootProject.projectDir}/exported-libs"
+    doFirst {
+        delete exportDir
+        def files = []
+        configurations.findAll { it.canBeResolved }.each { conf ->
+            try {
+                files += conf.resolvedConfiguration.resolvedArtifacts.collect { it.file }
+            } catch (Exception ignore) {}
+        }
+        copy {
+            from files
+            into exportDir
+            include '**/*.jar', '**/*.aar'
+        }
+    }
+}
+task listDependenciesFiles {
+    doLast {
+        configurations.findAll { it.canBeResolved }.each { conf ->
+            try {
+                conf.resolvedConfiguration.resolvedArtifacts.each { artifact ->
+                    println "${artifact.moduleVersion.id} -> ${artifact.file}"
+                }
+            } catch (Exception ignore) {}
+        }
+    }
+}

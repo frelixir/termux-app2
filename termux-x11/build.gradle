@@ -97,6 +97,7 @@ static def isMacOS() {
     println(System.properties['os.name']);
     return System.properties['os.name'].contains('Mac OS X');
 }
+
 afterEvaluate {
     tasks.register("generatePrefs") {
         //noinspection UnnecessaryQualifiedReference
