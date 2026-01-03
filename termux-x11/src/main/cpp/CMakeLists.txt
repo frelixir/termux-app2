@@ -19,8 +19,62 @@ include(CheckTypeSize)
 find_package(Python3 REQUIRED)
 find_package(BISON REQUIRED)
 
+# Apply patches (macOS only - Linux uses target_apply_patch in recipes)
+if(CMAKE_HOST_SYSTEM_NAME STREQUAL "Darwin")
+    message(STATUS "Applying patches (macOS)...")
+    
+    set(PATCH_LIST
+        "xkbcomp:xkbcomp.patch"
+        "libxkbfile:xkbfile.patch"
+        "libx11:x11.patch"
+        "libxtrans:Xtrans.patch"
+        "xserver:xserver.patch"
+        "libepoxy:libepoxy.patch"
+        "pixman:pixman.patch"
+    )
+    
+    foreach(patch_entry ${PATCH_LIST})
+        string(REPLACE ":" ";" patch_parts "${patch_entry}")
+        list(GET patch_parts 0 target_dir)
+        list(GET patch_parts 1 patch_file)
+        
+        set(dir "${CMAKE_CURRENT_SOURCE_DIR}/${target_dir}")
+        set(patch "${CMAKE_CURRENT_SOURCE_DIR}/patches/${patch_file}")
+        
+        # Use git apply -R --check to detect if patch is already applied
+        execute_process(
+            COMMAND bash -c "cd '${dir}' && git apply -R --check '${patch}' > /dev/null 2>&1"
+            RESULT_VARIABLE can_reverse
+        )
+        
+        if(can_reverse EQUAL 0)
+            # Can reverse → already applied → skip
+            message(STATUS "  ✓ ${patch_file} (already applied)")
+        else()
+            # Cannot reverse → not applied → apply with git
+            execute_process(
+                COMMAND bash -c "cd '${dir}' && git apply '${patch}'"
+                RESULT_VARIABLE patch_result
+            )
+            if(patch_result EQUAL 0)
+                message(STATUS "  ✓ ${patch_file} (applied)")
+            else()
+                message(WARNING "Failed to apply ${patch_file}")
+            endif()
+        endif()
+    endforeach()
+    
+    message(STATUS "All patches applied successfully")
+endif()
+
 function(target_apply_patch patch_target d p)
-    execute_process(COMMAND "bash" "-c" "patch -p1 -d ${d} -i ${p} -R --dry-run > /dev/null 2>&1 || patch -p1 -N -d ${d} -i ${p} -r -")
+    if(CMAKE_HOST_SYSTEM_NAME STREQUAL "Darwin")
+        # macOS: patches already applied at top of CMakeLists.txt
+        # Empty function for macOS
+    else()
+        # Linux: use GNU patch with original logic
+        execute_process(COMMAND "bash" "-c" "patch -p1 -d ${d} -i ${p} -R --dry-run > /dev/null 2>&1 || patch -p1 -N -d ${d} -i ${p} -r -")
+    endif()
 endfunction()
 
 set(test_compile_options

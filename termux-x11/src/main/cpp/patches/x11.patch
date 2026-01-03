@@ -43,3 +43,26 @@ index a8ebf883..d716fdb0 100644
      }
      return db;
  }
+diff --git a/include/X11/Xlocale.h b/include/X11/Xlocale.h
+index db46e70c..7aef2dab 100644
+--- a/include/X11/Xlocale.h
++++ b/include/X11/Xlocale.h
+@@ -32,6 +32,17 @@ from The Open Group.
+ #include <X11/Xfuncproto.h>
+ #include <X11/Xosdefs.h>
+ 
+-#include <locale.h>
++/* Android locale_t fix */
++#ifdef __ANDROID__
++  #if !defined(__locale_t_defined) && !defined(_LOCALE_T)
++    #define __locale_t_defined 1
++    #define _LOCALE_T 1
++    struct __locale_t;
++    typedef struct __locale_t* locale_t;
++  #endif
++  #include <locale.h>
++#else
++  #include <locale.h>
++#endif
+ 
+ #endif /* _X11_XLOCALE_H_ */
