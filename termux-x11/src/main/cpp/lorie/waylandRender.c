@@ -104,6 +104,7 @@ static void waylandActivityConnected(void) {
 static int addFd() {
 //    InputThreadRegisterDev((int) (int64_t) closure, handleLorieEvents, NULL);
 //    conn_fd = (int) (int64_t) closure;
+
     waylandActivityConnected();
     return 1;
 }
