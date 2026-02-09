@@ -7,19 +7,21 @@
 #include <errno.h>
 #include <unistd.h>
 #include <pthread.h>
+#include <list.h>
 #include "waylandRender.h"
 #include "buffer.h"
 #include "lorie.h"
 
 #define log(prio, ...) __android_log_print(ANDROID_LOG_ ## prio, "LorieNative", __VA_ARGS__)
 #define min(a, b) (((a) < (b)) ? (a) : (b))
-static int PORT = 7890;
-static char MAGIC[] = "0xDEADPORK";
-static int connect_fd =-1;
+static int WAYLAND_PORT = 7890;
+static char WAYLAND_MAGIC[] = "0xDEADPORK";
+static int conn_fd =-1;
+static struct xorg_list registeredWaylandBuffers;
 static void startRenderServer() {
     int server_fd, client, count;
     struct sockaddr_in address = {.sin_family = AF_INET, .sin_addr = {.s_addr = INADDR_ANY}, .sin_port = htons(
-            PORT)};
+            WAYLAND_PORT)};
     int addrlen = sizeof(address);
 
     uint8_t buffer[512] = {0};
@@ -55,28 +57,54 @@ static void startRenderServer() {
         }
 
         if ((count = read(client, buffer, sizeof(buffer))) > 0) {
-            if (!memcmp(buffer, MAGIC, min(count, (int)sizeof(MAGIC)))) {
+            if (!memcmp(buffer, WAYLAND_MAGIC, min(count, (int)sizeof(WAYLAND_MAGIC)))) {
                 log(DEBUG, "New client connection!\n");
             }
         }
         close(client);
     }
 }
-static void lorieSendSharedServerState(int memfd) {
+void waylandRegisterBuffer(LorieBuffer* buffer) {
+    unsigned long id = LorieBuffer_description(buffer)->id;
+    if (conn_fd == -1 || LorieBufferList_findById(&registeredWaylandBuffers, id))
+        return; // Already registered
+
+    if (conn_fd != -1 && buffer) {
+        lorieEvent e = { .type = EVENT_ADD_BUFFER };
+        write(conn_fd, &e, sizeof(e));
+        LorieBuffer_sendHandleToUnixSocket(buffer, conn_fd);
+        LorieBuffer_addToList(buffer, &registeredWaylandBuffers);
+        const LorieBuffer_Desc* desc = LorieBuffer_description(buffer);
+        log(INFO, "Sent shared buffer width %d stride %d height %d format %d type %d id %llu", desc->width, desc->stride, desc->height, desc->format, desc->type, desc->id);
+    }
+}
+
+void waylandUnregisterBuffer(LorieBuffer* buffer) {
+    unsigned long id;
+    if (!buffer || (!LorieBufferList_findById(&registeredWaylandBuffers, (id = LorieBuffer_description(buffer)->id))))
+        return;  // Not exist or not registered so no need to unregister
+
+    if (conn_fd != -1 && buffer) {
+        lorieEvent e = { .removeBuffer = { .t = EVENT_REMOVE_BUFFER, .id = id } };
+        write(conn_fd, &e, sizeof(e));
+        LorieBuffer_removeFromList(buffer);
+    }
+}
+static void waylandSendSharedServerState(int memfd) {
     if (conn_fd != -1) {
         lorieEvent e = { .type = EVENT_SHARED_SERVER_STATE };
         write(conn_fd, &e, sizeof(e));
         ancil_send_fd(conn_fd, memfd);
     }
 }
-static void lorieActivityConnected(void) {
-    lorieSendSharedServerState(pvfb->stateFd);
-    lorieRegisterBuffer(LORIE_BUFFER_FROM_PIXMAP(pScreenPtr->devPrivate));
+static void waylandActivityConnected(void) {
+    waylandSendSharedServerState(pvfb->stateFd);
+    waylandRegisterBuffer(LORIE_BUFFER_FROM_PIXMAP(pScreenPtr->devPrivate));
 }
 static int addFd() {
 //    InputThreadRegisterDev((int) (int64_t) closure, handleLorieEvents, NULL);
 //    conn_fd = (int) (int64_t) closure;
-    lorieActivityConnected();
+    waylandActivityConnected();
     return 1;
 }
 void waylandRenderInit(JNIEnv *env){
@@ -84,6 +112,6 @@ void waylandRenderInit(JNIEnv *env){
     JavaVM *vm;
 
     (*env)->GetJavaVM(env, &vm);
-
+    xorg_list_init(&registeredWaylandBuffers);
     pthread_create(&t, NULL, (void*(*)(void*)) startRenderServer, vm);
 }
