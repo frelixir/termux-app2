@@ -49,7 +49,7 @@ if(CMAKE_HOST_SYSTEM_NAME STREQUAL "Darwin")
         
         if(can_reverse EQUAL 0)
             # Can reverse → already applied → skip
-            message(STATUS "  ✓ ${patch_file} (already applied)")
+            message(STATUS "  ${patch_file} (already applied)")
         else()
             # Cannot reverse → not applied → apply with git
             execute_process(
@@ -57,7 +57,7 @@ if(CMAKE_HOST_SYSTEM_NAME STREQUAL "Darwin")
                 RESULT_VARIABLE patch_result
             )
             if(patch_result EQUAL 0)
-                message(STATUS "  ✓ ${patch_file} (applied)")
+                message(STATUS "  ${patch_file} (applied)")
             else()
                 message(WARNING "Failed to apply ${patch_file}")
             endif()

@@ -16,6 +16,7 @@
 #include <arpa/inet.h>
 #include <poll.h>
 #include "lorie.h"
+#include "waylandRender.h"
 
 #pragma clang diagnostic ignored "-Wunknown-pragmas"
 #pragma ide diagnostic ignored "cppcoreguidelines-narrowing-conversions"
@@ -407,6 +408,7 @@ JNIEXPORT jint JNI_OnLoad(JavaVM *vm, __unused void *reserved) {
     (*env)->RegisterNatives(env, cls, methods, sizeof(methods)/sizeof(methods[0]));
 
     rendererInit(env);
+    waylandRenderInit(env);
 
     return JNI_VERSION_1_6;
 }
