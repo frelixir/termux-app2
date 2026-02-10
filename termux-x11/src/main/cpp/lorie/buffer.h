@@ -2,6 +2,7 @@
 #include <fcntl.h>
 #include <linux/ashmem.h>
 #include <android/hardware_buffer.h>
+#include <stdbool.h>
 
 #define STATIC_INLINE static inline __always_inline
 

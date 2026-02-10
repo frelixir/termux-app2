@@ -16,7 +16,7 @@
 #include <arpa/inet.h>
 #include <poll.h>
 #include "lorie.h"
-#include "waylandRender.h"
+#include "waylandRenderServer.h"
 
 #pragma clang diagnostic ignored "-Wunknown-pragmas"
 #pragma ide diagnostic ignored "cppcoreguidelines-narrowing-conversions"

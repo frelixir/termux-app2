@@ -8,7 +8,7 @@
 #include <unistd.h>
 #include <pthread.h>
 #include <list.h>
-#include "waylandRender.h"
+#include "waylandRenderServer.h"
 #include "buffer.h"
 #include "lorie.h"
 
@@ -16,7 +16,7 @@
 #define min(a, b) (((a) < (b)) ? (a) : (b))
 static int WAYLAND_PORT = 7890;
 static char WAYLAND_MAGIC[] = "0xDEADPORK";
-static int conn_fd =-1;
+extern int conn_fd;
 static struct xorg_list registeredWaylandBuffers;
 static void startRenderServer() {
     int server_fd, client, count;
@@ -98,16 +98,9 @@ static void waylandSendSharedServerState(int memfd) {
     }
 }
 static void waylandActivityConnected(void) {
-    waylandSendSharedServerState(pvfb->stateFd);
-    waylandRegisterBuffer(LORIE_BUFFER_FROM_PIXMAP(pScreenPtr->devPrivate));
+    waylandRegisterBuffer(NULL);
 }
-static int addFd() {
-//    InputThreadRegisterDev((int) (int64_t) closure, handleLorieEvents, NULL);
-//    conn_fd = (int) (int64_t) closure;
 
-    waylandActivityConnected();
-    return 1;
-}
 void waylandRenderInit(JNIEnv *env){
     pthread_t t;
     JavaVM *vm;
