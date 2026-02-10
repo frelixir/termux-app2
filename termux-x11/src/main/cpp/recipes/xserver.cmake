@@ -282,7 +282,7 @@ add_library(Xlorie SHARED
         "lorie/renderer.c"
         "lorie/buffer.c"
         "lorie/activity.c"
-        "lorie/waylandRender.c")
+        "lorie/waylandRenderServer.c")
 target_include_directories(Xlorie PRIVATE ${inc} "libxcvt/include")
 target_link_options(Xlorie PRIVATE "-Wl,--as-needed" "-Wl,--no-undefined" "-fvisibility=hidden")
 target_link_libraries(Xlorie "-Wl,--whole-archive" ${XSERVER_LIBS} "-Wl,--no-whole-archive" android log m z EGL GLESv2)
