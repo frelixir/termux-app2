@@ -19,8 +19,8 @@
 #include <GLES2/gl2ext.h>
 #include <android/sharedmem.h>
 #include <unistd.h>
-#include "list.h"
-#include "buffer.h"
+#include "include/list.h"
+#include "include/buffer.h"
 
 struct LorieBuffer {
     int16_t refcount;
@@ -194,7 +194,7 @@ __LIBC_HIDDEN__ LorieBuffer* LorieBuffer_wrapAHardwareBuffer(AHardwareBuffer* bu
     return allocate(0, 0, 0, 0, LORIEBUFFER_AHARDWAREBUFFER, buffer, -1, 0, 0, false);
 }
 
-__LIBC_HIDDEN__ void __LorieBuffer_free(LorieBuffer* buffer) {
+ void __LorieBuffer_free(LorieBuffer* buffer) {
     if (!buffer)
         return;
 
@@ -223,12 +223,12 @@ __LIBC_HIDDEN__ void __LorieBuffer_free(LorieBuffer* buffer) {
     free(buffer);
 }
 
-__LIBC_HIDDEN__ const LorieBuffer_Desc* LorieBuffer_description(LorieBuffer* buffer) {
+const LorieBuffer_Desc* LorieBuffer_description(LorieBuffer* buffer) {
     static const LorieBuffer_Desc none = {0};
     return buffer ? &buffer->desc : &none;
 }
 
-__LIBC_HIDDEN__ int LorieBuffer_lock(LorieBuffer* buffer, void** out) {
+ int LorieBuffer_lock(LorieBuffer* buffer, void** out) {
     int ret = 0;
     if (!buffer)
         return ENODEV;

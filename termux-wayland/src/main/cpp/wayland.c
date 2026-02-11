@@ -9,8 +9,8 @@
 #include <sys/epoll.h>
 #include <sys/mman.h>
 #include <pthread.h>
-#include "buffer.h"
-#include "wayland.h"
+#include "include/buffer.h"
+#include "include/wayland.h"
 
 static int conn_fd = -1, epfd = -1, stateFd = -1;
 static struct epoll_event ev, events[5];
@@ -152,7 +152,7 @@ static int waylandRenderConnected(void) {
     pthread_t t;
     pthread_create(&t, NULL, (void *(*)(void *)) callback(), NULL);
 }
-static int connectToRender() {
+int connectToRender() {
     int conn_fd;
     int connect_retry = 0;
     struct sockaddr_un serverAddr;

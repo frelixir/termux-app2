@@ -338,3 +338,4 @@ static int android_to_linux_keycode[304] = {
         [ 208  /* ANDROID_KEYCODE_CALENDAR */] = KEY_CALENDAR,
         [ 210  /* ANDROID_KEYCODE_CALCULATOR */] = KEY_CALC,
 };
+int connectToRender();
