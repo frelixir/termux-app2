@@ -272,16 +272,6 @@ __LIBC_HIDDEN__ int LorieBuffer_unlock(LorieBuffer* buffer) {
     return ret;
 }
 
-__LIBC_HIDDEN__ void LorieBuffer_sendHandleToUnixSocket(LorieBuffer* _Nonnull buffer, int socketFd) {
-    if (socketFd < 0 || !buffer)
-        return;
-
-    write(socketFd, buffer, sizeof(*buffer));
-    if (buffer->desc.type == LORIEBUFFER_FD)
-        ancil_send_fd(socketFd, buffer->fd);
-    else if (buffer->desc.type == LORIEBUFFER_AHARDWAREBUFFER)
-        AHardwareBuffer_sendHandleToUnixSocket(buffer->desc.buffer, socketFd);
-}
 
 __LIBC_HIDDEN__ void LorieBuffer_recvHandleFromUnixSocket(int socketFd, LorieBuffer** outBuffer) {
     LorieBuffer buffer = {0}, *ret = NULL;
@@ -335,106 +325,6 @@ __LIBC_HIDDEN__ void LorieBuffer_recvHandleFromUnixSocket(int socketFd, LorieBuf
     *ret = buffer;
     xorg_list_init(&ret->link);
     *outBuffer = ret;
-}
-
-__LIBC_HIDDEN__ void LorieBuffer_attachToGL(LorieBuffer* buffer) {
-    const EGLint imageAttributes[] = { EGL_IMAGE_PRESERVED_KHR, EGL_TRUE, EGL_NONE };
-    if (!eglGetCurrentDisplay() || !buffer)
-        return;
-
-    if (buffer->image == NULL && buffer->desc.buffer)
-        buffer->image = eglCreateImageKHR(eglGetCurrentDisplay(), EGL_NO_CONTEXT, EGL_NATIVE_BUFFER_ANDROID, eglGetNativeClientBufferANDROID(buffer->desc.buffer), imageAttributes);
-
-    glGenTextures(1, &buffer->id);
-    glBindTexture(GL_TEXTURE_2D, buffer->id);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-
-    if (buffer->image)
-        glEGLImageTargetTexture2DOES(GL_TEXTURE_2D, buffer->image);
-    else if (buffer->desc.data && buffer->desc.width > 0 && buffer->desc.height > 0) {
-        int format = buffer->desc.format == AHARDWAREBUFFER_FORMAT_B8G8R8A8_UNORM ? GL_BGRA_EXT : GL_RGBA;
-        // The image will be updated in redraw call because of `drawRequested` flag, so we are not uploading pixels
-        glTexImage2D(GL_TEXTURE_2D, 0, format, buffer->desc.stride, buffer->desc.height, 0, format, GL_UNSIGNED_BYTE, NULL);
-    }
-}
-
-__LIBC_HIDDEN__ void LorieBuffer_bindTexture(LorieBuffer *buffer) {
-    if (!buffer)
-        return;
-
-    glBindTexture(GL_TEXTURE_2D, buffer->id);
-    if (buffer->desc.type == LORIEBUFFER_FD)
-        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, buffer->desc.stride, buffer->desc.height, buffer->desc.format == AHARDWAREBUFFER_FORMAT_B8G8R8A8_UNORM ? GL_BGRA_EXT : GL_RGBA, GL_UNSIGNED_BYTE, buffer->desc.data);
-}
-
-__LIBC_HIDDEN__ int LorieBuffer_getWidth(LorieBuffer *buffer) {
-    return LorieBuffer_description(buffer)->width;
-}
-
-__LIBC_HIDDEN__ int LorieBuffer_getHeight(LorieBuffer *buffer) {
-    return LorieBuffer_description(buffer)->height;
-}
-
-__LIBC_HIDDEN__ bool LorieBuffer_isRgba(LorieBuffer *buffer) {
-    return LorieBuffer_description(buffer)->format != AHARDWAREBUFFER_FORMAT_B8G8R8A8_UNORM;
-}
-
-__LIBC_HIDDEN__ void LorieBuffer_addToList(LorieBuffer* _Nullable buffer, struct xorg_list* _Nullable list) {
-    if (buffer && list) {
-        xorg_list_del(&buffer->link);
-        xorg_list_add(&buffer->link, list);
-    }
-}
-
-__LIBC_HIDDEN__ void LorieBuffer_removeFromList(LorieBuffer* _Nullable buffer) {
-    if (buffer)
-        xorg_list_del(&buffer->link);
-}
-
-__LIBC_HIDDEN__ LorieBuffer* _Nullable LorieBufferList_first(struct xorg_list* _Nullable list) {
-    return xorg_list_is_empty(list) ? NULL : xorg_list_first_entry(list, LorieBuffer, link);
-}
-
-__LIBC_HIDDEN__ LorieBuffer* _Nullable LorieBufferList_findById(struct xorg_list* _Nullable list, uint64_t id) {
-    LorieBuffer *buffer;
-    xorg_list_for_each_entry(buffer, list, link)
-        if (buffer->desc.id == id)
-            return buffer;
-    return NULL;
-}
-
-__LIBC_HIDDEN__ int ancil_send_fd(int sock, int fd) {
-    char nothing = '!';
-    struct iovec nothing_ptr = { .iov_base = &nothing, .iov_len = 1 };
-
-    struct {
-        struct cmsghdr align;
-        int fd[1];
-    } ancillary_data_buffer;
-
-    struct msghdr message_header = {
-            .msg_name = NULL,
-            .msg_namelen = 0,
-            .msg_iov = &nothing_ptr,
-            .msg_iovlen = 1,
-            .msg_flags = 0,
-            .msg_control = &ancillary_data_buffer,
-            .msg_controllen = sizeof(struct cmsghdr) + sizeof(int)
-    };
-
-#pragma clang diagnostic push
-#pragma ide diagnostic ignored "NullDereference"
-    struct cmsghdr* cmsg = CMSG_FIRSTHDR(&message_header);
-    cmsg->cmsg_len = message_header.msg_controllen; // sizeof(int);
-    cmsg->cmsg_level = SOL_SOCKET;
-    cmsg->cmsg_type = SCM_RIGHTS;
-    ((int*) CMSG_DATA(cmsg))[0] = fd;
-#pragma clang diagnostic pop
-
-    return sendmsg(sock, &message_header, 0) >= 0 ? 0 : -1;
 }
 
 __LIBC_HIDDEN__ int ancil_recv_fd(int sock) {

@@ -1,2 +1,3 @@
 #include <jni.h>
- void waylandRenderInit(JNIEnv *env);
+void waylandRenderInit(JavaVM *vm);
+void setGlobalEnv(JNIEnv*,jobject);

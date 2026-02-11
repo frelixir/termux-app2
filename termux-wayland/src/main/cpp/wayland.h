@@ -80,6 +80,10 @@ typedef enum {
     EVENT_CLIPBOARD_REQUEST,
     EVENT_CLIPBOARD_SEND,
     EVENT_WINDOW_FOCUS_CHANGED,
+    EVENT_APPLY_SERVER_STATE,
+    EVENT_DESTROY_SERVER_STATE,
+    EVENT_APPLY_BUFFER,
+    EVENT_DESTROY_BUFFER,
 } eventType;
 
 typedef union {
@@ -89,6 +93,8 @@ typedef union {
         uint16_t width, height, framerate;
         size_t name_size;
         char *name;
+        uint8_t format;
+        uint8_t pixel_type;
     } screenSize;
     struct {
         uint8_t t;
