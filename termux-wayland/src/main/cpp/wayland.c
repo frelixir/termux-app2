@@ -12,7 +12,8 @@
 #include "buffer.h"
 #include "wayland.h"
 
-static int conn_fd = -1, epfd = -1;
+static int conn_fd = -1, epfd = -1, stateFd = -1;
+static struct epoll_event ev, events[5];
 static int connect_retry = 0;
 #define log(prio, ...) __android_log_print(ANDROID_LOG_ ## prio, "LorieNative", __VA_ARGS__)
 #define MAX_RETRY_TIMES 5
@@ -20,11 +21,8 @@ static int connect_retry = 0;
 #define SIGTERM_MSG "\nKILL | SIGTERM received.\n"
 #define SOCKET_PATH "/data/data/com.termux/files/home/.wayland/unix_socket"
 
-static struct epoll_event ev, events[5];
-
-static int eventFd = -1, stateFd = -1;
-static LorieBuffer *lorieBuffer;
-static struct lorie_shared_server_state *state;
+LorieBuffer *lorieBuffer;
+struct lorie_shared_server_state *serverState;
 
 JNIEXPORT jstring JNICALL
 Java_com_termux_wayland_NativeLib_stringFromJNI(
@@ -45,12 +43,12 @@ static void OsVendorInit(void) {
     pthread_mutexattr_init(&mutex_attr);
     pthread_mutexattr_setpshared(&mutex_attr, PTHREAD_PROCESS_SHARED);
     pthread_mutexattr_settype(&mutex_attr, PTHREAD_MUTEX_RECURSIVE);
-    pthread_mutex_init(&state->lock, &mutex_attr);
-    pthread_mutex_init(&state->cursor.lock, &mutex_attr);
+    pthread_mutex_init(&serverState->lock, &mutex_attr);
+    pthread_mutex_init(&serverState->cursor.lock, &mutex_attr);
 
     pthread_condattr_init(&cond_attr);
     pthread_condattr_setpshared(&cond_attr, PTHREAD_PROCESS_SHARED);
-    pthread_cond_init(&state->cond, &cond_attr);
+    pthread_cond_init(&serverState->cond, &cond_attr);
 }
 
 static void waylandApplyBuffer() {
@@ -80,10 +78,10 @@ static void waylandApplySharedServerState() {
         exit(EXIT_FAILURE);
     }
 
-    state = mmap(NULL, sizeof(*state), PROT_READ | PROT_WRITE, MAP_SHARED, stateFd, 0);
-    if (!state || state == MAP_FAILED) {
+    serverState = mmap(NULL, sizeof(*serverState), PROT_READ | PROT_WRITE, MAP_SHARED, stateFd, 0);
+    if (!serverState || serverState == MAP_FAILED) {
         log(ERROR, "Failed to map server state: %s", strerror(errno));
-        state = NULL;
+        serverState = NULL;
         exit(EXIT_FAILURE);
     }
     close(stateFd);
