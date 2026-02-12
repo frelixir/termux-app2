@@ -126,8 +126,10 @@ static void nativeInit(JNIEnv *env, jobject thiz) {
     (*env)->GetJavaVM(env, &vm);
     (*vm)->AttachCurrentThread(vm, &guienv, NULL);
     globalThiz = (*guienv)->NewGlobalRef(env, thiz);
-    setGlobalEnv(guienv,globalThiz);
+    setGlobalEnv(guienv,&globalThiz);
     connect_(NULL, NULL, -1);
+
+    waylandRenderInit(vm);
 }
 
 static int xcallback(int fd, int events, __unused void* data) {
@@ -409,7 +411,6 @@ JNIEXPORT jint JNI_OnLoad(JavaVM *vm, __unused void *reserved) {
     (*env)->RegisterNatives(env, cls, methods, sizeof(methods)/sizeof(methods[0]));
 
     rendererInit(env);
-    waylandRenderInit(vm);
 
     return JNI_VERSION_1_6;
 }

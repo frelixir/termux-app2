@@ -147,7 +147,8 @@ static void serv(JavaVM *vm, jint fd) {
         rendererRemoveAllBuffers();
         log(DEBUG, "disconnected");
     }
-
+    JNIEnv* env;
+    (*vm)->AttachCurrentThread(vm, &env, NULL);
     if ((conn_fd = fd) != -1) {
         ALooper_addFd(ALooper_forThread(), fd, 0, ALOOPER_EVENT_INPUT | ALOOPER_EVENT_ERROR | ALOOPER_EVENT_HANGUP, process, NULL);
         log(DEBUG, "XCB connection is successfull");
@@ -155,6 +156,7 @@ static void serv(JavaVM *vm, jint fd) {
 }
 
 static void startRenderServer(JavaVM *vm) {
+    conn_fd=-1;
     int server_fd, client_fd, count;
     struct sockaddr_un address;
     uint8_t buffer[512] = {0};
@@ -200,7 +202,7 @@ static void startRenderServer(JavaVM *vm) {
             if (!memcmp(buffer, MAGIC, count < (int)sizeof(MAGIC) ? count : (int)sizeof(MAGIC))) {
                 log(DEBUG,"New client connection!");
                 lorieEvent e = {.type = EVENT_VERIFY_SUCCEED};
-                write(conn_fd, &e, sizeof(e));
+                write(client_fd, &e, sizeof(e));
                 serv(vm, client_fd);
             }else{
                 close(client_fd);
@@ -259,5 +261,7 @@ void setGlobalEnv(JNIEnv* env,jobject obj){
 void waylandRenderInit(JavaVM *vm) {
     pthread_t t;
     xorg_list_init(&registeredWaylandBuffers);
+    JNIEnv* env;
+    (*vm)->AttachCurrentThread(vm, &env, NULL);
     pthread_create(&t, NULL, (void *(*)(void *)) startRenderServer, vm);
 }
