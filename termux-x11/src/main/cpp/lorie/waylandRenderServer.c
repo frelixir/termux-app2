@@ -16,6 +16,7 @@
 #include "buffer.h"
 #include "lorie.h"
 
+#define MAX_WAITING_CONNECT_CLIENTS 5
 #define SOCKET_PATH "/data/data/com.termux/files/home/.wayland/unix_socket"
 #define log(prio, ...) __android_log_print(ANDROID_LOG_ ## prio, "LorieNative", __VA_ARGS__)
 #define min(a, b) (((a) < (b)) ? (a) : (b))
@@ -178,7 +179,7 @@ static void startRenderServer(JavaVM *vm) {
     }
 
     // 监听连接
-    if (listen(server_fd, 5) < 0) {
+    if (listen(server_fd, MAX_WAITING_CONNECT_CLIENTS) < 0) {
         log(ERROR,"Socket listen failed: %s", strerror(errno));
         close(server_fd);
         unlink(SOCKET_PATH);
@@ -198,7 +199,12 @@ static void startRenderServer(JavaVM *vm) {
         if (count > 0) {
             if (!memcmp(buffer, MAGIC, count < (int)sizeof(MAGIC) ? count : (int)sizeof(MAGIC))) {
                 log(DEBUG,"New client connection!");
+                lorieEvent e = {.type = EVENT_VERIFY_SUCCEED};
+                write(conn_fd, &e, sizeof(e));
                 serv(vm, client_fd);
+            }else{
+                close(client_fd);
+                log(ERROR,"Invalid client connection!");
             }
         }
     }
