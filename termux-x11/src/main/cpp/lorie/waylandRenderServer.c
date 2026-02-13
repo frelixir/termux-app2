@@ -118,7 +118,7 @@ static int process(int fd, int events, __unused void* data) {
                     break;
                 }
                 case EVENT_APPLY_BUFFER:{
-                    LorieBuffer* buffer = LorieBuffer_allocate(e.screenSize.width, e.screenSize.height,e.screenSize.format, e.screenSize.pixel_type);
+                    LorieBuffer* buffer = LorieBuffer_allocate(e.screenSize.width, e.screenSize.height,e.screenSize.format, e.screenSize.type);
                     waylandRegisterBuffer(buffer);
                     break;
                 }
