@@ -126,7 +126,6 @@ static void nativeInit(JNIEnv *env, jobject thiz) {
     (*env)->GetJavaVM(env, &vm);
     (*vm)->AttachCurrentThread(vm, &guienv, NULL);
     globalThiz = (*guienv)->NewGlobalRef(env, thiz);
-    setGlobalEnv(guienv,&globalThiz);
     connect_(NULL, NULL, -1);
 
     waylandRenderInit(vm);
