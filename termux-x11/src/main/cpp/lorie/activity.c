@@ -25,24 +25,24 @@
 
 extern volatile int conn_fd; // The only variable from shared with X server code.
 
-static struct {
+struct {
     jclass self;
-    jmethodID getInstance, clientConnectedStateChanged, resetIme;
+    jmethodID getInstance, clientConnectedStateChanged, resetIme, onRenderConnected;
 } MainActivity = {0};
 
-static struct {
+struct {
     jclass self;
     jmethodID forName;
     jmethodID decode;
 } Charset = {0};
 
-static struct {
+struct {
     jclass self;
     jmethodID toString;
 } CharBuffer = {0};
 
-static JNIEnv *guienv = NULL; // Must be used only in GUI thread.
-static jobject globalThiz = NULL;
+JNIEnv *guienv = NULL; // Must be used only in GUI thread.
+jobject globalThiz = NULL;
 
 static jclass FindClassOrDie(JNIEnv *env, const char* name) {
     jclass clazz = (*env)->FindClass(env, name);
@@ -121,6 +121,7 @@ static void nativeInit(JNIEnv *env, jobject thiz) {
         MainActivity.getInstance = FindMethodOrDie(env, MainActivity.self, "getInstance", "()Lcom/termux/x11/MainActivity;", JNI_TRUE);
         MainActivity.clientConnectedStateChanged = FindMethodOrDie(env, MainActivity.self, "clientConnectedStateChanged", "()V", JNI_FALSE);
         MainActivity.resetIme = FindMethodOrDie(env, (*env)->GetObjectClass(env, thiz), "resetIme", "()V", JNI_FALSE);
+        MainActivity.onRenderConnected = FindMethodOrDie(env, MainActivity.self, "onRenderConnected", "()V", JNI_FALSE);
     }
 
     (*env)->GetJavaVM(env, &vm);
@@ -148,7 +149,6 @@ static int xcallback(int fd, int events, __unused void* data) {
         log(DEBUG, "disconnected");
         return 1;
     }
-
     if (conn_fd != -1) {
         lorieEvent e = {0};
 

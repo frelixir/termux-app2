@@ -33,7 +33,7 @@ static struct xorg_list registeredWaylandBuffers;
 
 extern struct {
     jclass self;
-    jmethodID getInstance, clientConnectedStateChanged, resetIme;
+    jmethodID getInstance, clientConnectedStateChanged, resetIme, onRenderConnected;
 } MainActivity;
 
 extern struct {
@@ -96,7 +96,6 @@ static int process(int fd) {
     struct pollfd pfd;
     pfd.fd = fd;
     pfd.events = POLLIN;
-
     while (1) {
         int ret = poll(&pfd, 1, -1);  // 阻塞等待
         if (ret < 0) {
@@ -138,6 +137,14 @@ static int process(int fd) {
                                                                        e2.screenSize.format,
                                                                        e2.screenSize.type);
                             waylandRegisterBuffer(buffer);
+                            break;
+                        }
+                        case EVENT_CLIENT_VERIFY_SUCCEED:{
+                            JNIEnv *env = guienv;
+                            jobject thiz = globalThiz;
+                            jobject instance = (*env)->CallStaticObjectMethod(env, MainActivity.self, MainActivity.getInstance);
+                            if (instance)
+                                (*env)->CallVoidMethod(env, instance, MainActivity.clientConnectedStateChanged);
                             break;
                         }
                         case EVENT_DESTROY_BUFFER: {
@@ -212,9 +219,10 @@ static void startRenderServer(JavaVM *vm) {
         if (count > 0) {
             if (!memcmp(buffer, MAGIC, count < (int) sizeof(MAGIC) ? count : (int) sizeof(MAGIC))) {
                 log(DEBUG, "New client connection!");
-                lorieEvent e = {.type = EVENT_VERIFY_SUCCEED};
+                lorieEvent e = {.type = EVENT_SERVER_VERIFY_SUCCEED};
                 write(client_fd, &e, sizeof(e));
                 conn_fd = client_fd;
+                (*vm)->AttachCurrentThread(vm, &guienv, NULL);
                 process(client_fd);
             } else {
                 close(client_fd);
@@ -225,35 +233,6 @@ static void startRenderServer(JavaVM *vm) {
 
     close(server_fd);
     unlink(SOCKET_PATH);
-}
-
-static jclass FindClassOrDie(JNIEnv *env, const char *name) {
-    jclass clazz = (*env)->FindClass(env, name);
-    if (!clazz) {
-        char buffer[1024] = {0};
-        sprintf(buffer, "class %s not found", name);
-        log(ERROR, "%s", buffer);
-        (*env)->FatalError(env, buffer);
-        return NULL;
-    }
-
-    return (*env)->NewGlobalRef(env, clazz);
-}
-
-static jclass FindMethodOrDie(JNIEnv *env, jclass clazz, const char *name, const char *signature,
-                              jboolean isStatic) {
-    __typeof__((*env)->GetMethodID) getMethodID = isStatic ? (*env)->GetStaticMethodID
-                                                           : (*env)->GetMethodID;
-    jmethodID method = getMethodID(env, clazz, name, signature);
-    if (!method) {
-        char buffer[1024] = {0};
-        sprintf(buffer, "method %s %s not found", name, signature);
-        log(ERROR, "%s", buffer);
-        (*env)->FatalError(env, buffer);
-        return NULL;
-    }
-
-    return method;
 }
 
 void waylandRenderInit(JavaVM *vm) {

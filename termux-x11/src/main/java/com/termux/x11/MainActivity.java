@@ -587,6 +587,11 @@ public class MainActivity extends LoriePreferences {
         }
         return false;
     }
+    void onRenderConnected(){
+        getLorieView().triggerCallback();
+        clientConnectedStateChanged();
+        getLorieView().reloadPreferences(prefs);
+    }
 
     public void setX11FocusedChanged(boolean x11Focused) {
         FullscreenWorkaround.setX11Focused(x11Focused);
