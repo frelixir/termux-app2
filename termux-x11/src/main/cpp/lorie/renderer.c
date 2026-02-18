@@ -563,7 +563,7 @@ void rendererRedrawLocked(bool* waitingForBuffers) {
 
     if (eglSwapBuffers(egl_display, sfc) != EGL_TRUE)
         printEglError("Failed to swap buffers", __LINE__);
-
+    log("success to swap buffers");
     // Perform a little drawing operation to make sure the next buffer is ready on the next invocation of drawing
     glEnable(GL_SCISSOR_TEST);
     glScissor(0, 0, 1, 1);
@@ -593,15 +593,25 @@ static inline __always_inline bool rendererShouldWait(bool *waitingForBuffers) {
         lastRequestedBufferId = state->rootWindowTextureID;
     }
 
-    if (!state || !state->surfaceAvailable || state->waitForNextFrame || *waitingForBuffers)
+    if (!state || !state->surfaceAvailable || state->waitForNextFrame || *waitingForBuffers){
         // Even in the case if there are pending changes, we can not draw it without rendering surface
+        if(state){
+            log("state:%p",state);
+            log("state->surfaceAvailable:%d ",state->surfaceAvailable);
+            log("state->waitForNextFrame:%d ",state->waitForNextFrame);
+            log("*waitingForBuffers:%d ",*waitingForBuffers);
+        }else{
+            log("wait because of null state");
+        }
         return true;
+    }
 
     if (state->drawRequested || state->cursor.moved || state->cursor.updated)
         // X server reported drawing or cursor changes, no need to wait.
         return false;
 
     // Probably spurious wake, no changes we can work with.
+    log("wait because of spurious wake, no changes we can work with.");
     return true;
 }
 
@@ -609,8 +619,13 @@ __noreturn static void* rendererThread(void) {
     LorieBuffer* buf;
     bool waitingForBuffers = false;
     while (true) {
-        while (rendererShouldWait(&waitingForBuffers))
+
+
+        while (rendererShouldWait(&waitingForBuffers)){
+            log("pthread_cond_start_wait");
             pthread_cond_wait(&stateCond, &stateLock);
+            log("pthread_cond_end_wait");
+        }
 
         if (stateChanged) {
             struct lorie_shared_server_state* oldState = NULL;
@@ -631,7 +646,7 @@ __noreturn static void* rendererThread(void) {
             }
 
             pthreadCondVarProxyListenOtherCondVar(state ? &state->cond : NULL);
-
+            log("pthreadCondVarProxyListenOtherCondVar:%p ",state);
             if (oldState)
                 munmap(oldState, sizeof(*oldState));
         }
@@ -650,7 +665,15 @@ __noreturn static void* rendererThread(void) {
 
         pthread_cond_signal(&stateChangeFinishCond);
         pthread_mutex_unlock(&stateLock);
-
+//        if(state){
+//            log("state:%p",state);
+//            log("state->surfaceAvailable:%d ",state->surfaceAvailable);
+//            log("!state->waitForNextFrame:%d ",!state->waitForNextFrame);
+//            log("state->drawRequested:%d ",state->drawRequested);
+//            log("state->cursor.moved:%d ",state->cursor.moved);
+//            log("state->cursor.updated:%d ",state->cursor.updated);
+//        }
+//        log("should rendererRedrawLocked:%d ",(state && state->surfaceAvailable && !state->waitForNextFrame && (state->drawRequested || state->cursor.moved || state->cursor.updated)));
         if (state && state->surfaceAvailable && !state->waitForNextFrame && (state->drawRequested || state->cursor.moved || state->cursor.updated))
             rendererRedrawLocked(&waitingForBuffers);
 
@@ -784,6 +807,7 @@ __noreturn static void* pthreadCondVarProxyThread(void* cookie) {
         }
         proxy.relocked = true;
         pthread_cond_signal(&stateCond);
+        log("pthreadCondVarProxyThread receive signal");
     }
 }
 

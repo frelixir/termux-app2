@@ -50,6 +50,8 @@ extern struct {
 extern JNIEnv *guienv;
 extern jobject globalThiz;
 
+static int textureId=0;
+
 static void waylandSendSharedServerState(int memfd) {
     if (conn_fd != -1) {
         lorieEvent e = {.type = EVENT_SHARED_SERVER_STATE};
@@ -60,6 +62,7 @@ static void waylandSendSharedServerState(int memfd) {
 
 static void waylandRegisterBuffer(LorieBuffer *buffer) {
     unsigned long id = LorieBuffer_description(buffer)->id;
+    textureId=id;
     if (conn_fd == -1 || LorieBufferList_findById(&registeredWaylandBuffers, id))
         return; // Already registered
 
@@ -67,7 +70,8 @@ static void waylandRegisterBuffer(LorieBuffer *buffer) {
         lorieEvent e = {.type = EVENT_ADD_BUFFER};
         write(conn_fd, &e, sizeof(e));
         LorieBuffer_sendHandleToUnixSocket(buffer, conn_fd);
-        LorieBuffer_addToList(buffer, &registeredWaylandBuffers);
+        rendererAddBuffer(buffer);
+//        LorieBuffer_addToList(buffer, &registeredWaylandBuffers);
         const LorieBuffer_Desc *desc = LorieBuffer_description(buffer);
         log(INFO, "Sent shared buffer width %d stride %d height %d format %d type %d id %llu",
             desc->width, desc->stride, desc->height, desc->format, desc->type, desc->id);
@@ -125,6 +129,26 @@ static int process(int fd) {
                                 dprintf(2, "FATAL: Failed to map server state.\n");
                                 _exit(1);
                             }
+
+                            // Initialize cross-process synchronization primitives
+                            pthread_mutexattr_t mutex_attr;
+                            pthread_condattr_t cond_attr;
+
+                            pthread_mutexattr_init(&mutex_attr);
+                            pthread_mutexattr_setpshared(&mutex_attr, PTHREAD_PROCESS_SHARED);
+                            pthread_mutexattr_settype(&mutex_attr, PTHREAD_MUTEX_RECURSIVE);
+                            pthread_mutex_init(&state->lock, &mutex_attr);
+                            pthread_mutex_init(&state->cursor.lock, &mutex_attr);
+
+                            pthread_condattr_init(&cond_attr);
+                            pthread_condattr_setpshared(&cond_attr, PTHREAD_PROCESS_SHARED);
+                            pthread_cond_init(&state->cond, &cond_attr);
+
+                            pthread_mutexattr_destroy(&mutex_attr);
+                            pthread_condattr_destroy(&cond_attr);
+
+                            log(DEBUG, "lorie_shared_server_state:%p", state);
+                            state->rootWindowTextureID=textureId;
                             waylandSendSharedServerState(stateFd);
                             rendererSetSharedState(state);
                             break;
