@@ -71,7 +71,6 @@ static void waylandRegisterBuffer(LorieBuffer *buffer) {
         write(conn_fd, &e, sizeof(e));
         LorieBuffer_sendHandleToUnixSocket(buffer, conn_fd);
         rendererAddBuffer(buffer);
-//        LorieBuffer_addToList(buffer, &registeredWaylandBuffers);
         const LorieBuffer_Desc *desc = LorieBuffer_description(buffer);
         log(INFO, "Sent shared buffer width %d stride %d height %d format %d type %d id %llu",
             desc->width, desc->stride, desc->height, desc->format, desc->type, desc->id);
@@ -88,7 +87,6 @@ static void waylandUnregisterBuffer(LorieBuffer *buffer) {
         LorieBuffer_removeFromList(buffer);
         rendererSetSharedState(NULL);
         rendererRemoveAllBuffers();
-        log(DEBUG, "disconnected");
     }
 }
 
@@ -101,7 +99,7 @@ static int process(int fd) {
     pfd.fd = fd;
     pfd.events = POLLIN;
     while (1) {
-        int ret = poll(&pfd, 1, -1);  // 阻塞等待
+        int ret = poll(&pfd, 1, -1);
         if (ret < 0) {
             perror("poll");
             return -1;
@@ -109,11 +107,10 @@ static int process(int fd) {
 
         if (pfd.revents & POLLIN) {
 
-            while (1) { // 循环读取，直到没数据
+            while (1) {
                 lorieEvent e = {0};
                 ssize_t nread = read(fd, &e, sizeof(e));
                 if (nread == sizeof(e)) {
-                    // 处理事件
                     switch (e.type) {
                         case EVENT_APPLY_SERVER_STATE: {
                             struct lorie_shared_server_state *state = NULL;
@@ -178,11 +175,9 @@ static int process(int fd) {
                         }
                     }
                 } else if (nread == 0) {
-                    // 对端关闭连接
                     return 0;
                 } else if (nread < 0) {
                     if (errno == EAGAIN || errno == EWOULDBLOCK) {
-                        // 没有更多数据，退出读取循环，继续poll等待
                         break;
                     }
                     perror("read");
@@ -229,8 +224,6 @@ static void startRenderServer(JavaVM *vm) {
         unlink(SOCKET_PATH);
         return;
     }
-
-    log(DEBUG, "Unix domain socket server listening at %s", SOCKET_PATH);
 
     while (1) {
         client_fd = accept(server_fd, NULL, NULL);
