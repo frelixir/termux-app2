@@ -34,7 +34,7 @@ static int shared_state_fd = -1;
 
 extern struct {
     jclass self;
-    jmethodID getInstance, clientConnectedStateChanged, resetIme, onRenderConnected;
+    jmethodID getInstance, clientConnectedStateChanged, resetIme, onRenderConnectionChanged;
 } MainActivity;
 
 extern JNIEnv *guienv;
@@ -84,6 +84,11 @@ static void cleanupSharedResources(void) {
 
     rendererSetSharedState(NULL);
     rendererRemoveAllBuffers();
+
+    if(conn_fd){
+        close(conn_fd);
+        conn_fd=0;
+    }
 }
 
 static int process(int fd) {
@@ -164,11 +169,16 @@ static int process(int fd) {
                             jobject thiz = globalThiz;
                             jobject instance = (*env)->CallStaticObjectMethod(env, MainActivity.self, MainActivity.getInstance);
                             if (instance)
-                                (*env)->CallVoidMethod(env, instance, MainActivity.clientConnectedStateChanged);
+                                (*env)->CallVoidMethod(env, instance, MainActivity.onRenderConnectionChanged);
                             break;
                         }
                         case EVENT_STOP_RENDER:{
                             cleanupSharedResources();
+                            JNIEnv *env = guienv;
+                            jobject thiz = globalThiz;
+                            jobject instance = (*env)->CallStaticObjectMethod(env, MainActivity.self, MainActivity.getInstance);
+                            if (instance)
+                                (*env)->CallVoidMethod(env, instance, MainActivity.onRenderConnectionChanged);
                             return 0;
                         }
                     }

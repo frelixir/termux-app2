@@ -594,14 +594,6 @@ static inline __always_inline bool rendererShouldWait(bool *waitingForBuffers) {
 
     if (!state || !state->surfaceAvailable || state->waitForNextFrame || *waitingForBuffers){
         // Even in the case if there are pending changes, we can not draw it without rendering surface
-        if(state){
-            log("state:%p",state);
-            log("state->surfaceAvailable:%d ",state->surfaceAvailable);
-            log("state->waitForNextFrame:%d ",state->waitForNextFrame);
-            log("*waitingForBuffers:%d ",*waitingForBuffers);
-        }else{
-            log("wait because of null state");
-        }
         return true;
     }
 
@@ -610,7 +602,6 @@ static inline __always_inline bool rendererShouldWait(bool *waitingForBuffers) {
         return false;
 
     // Probably spurious wake, no changes we can work with.
-    log("wait because of spurious wake, no changes we can work with.");
     return true;
 }
 

@@ -27,7 +27,7 @@ extern volatile int conn_fd; // The only variable from shared with X server code
 
 struct {
     jclass self;
-    jmethodID getInstance, clientConnectedStateChanged, resetIme, onRenderConnected;
+    jmethodID getInstance, clientConnectedStateChanged, resetIme, onRenderConnectionChanged;
 } MainActivity = {0};
 
 struct {
@@ -121,7 +121,7 @@ static void nativeInit(JNIEnv *env, jobject thiz) {
         MainActivity.getInstance = FindMethodOrDie(env, MainActivity.self, "getInstance", "()Lcom/termux/x11/MainActivity;", JNI_TRUE);
         MainActivity.clientConnectedStateChanged = FindMethodOrDie(env, MainActivity.self, "clientConnectedStateChanged", "()V", JNI_FALSE);
         MainActivity.resetIme = FindMethodOrDie(env, (*env)->GetObjectClass(env, thiz), "resetIme", "()V", JNI_FALSE);
-        MainActivity.onRenderConnected = FindMethodOrDie(env, MainActivity.self, "onRenderConnected", "()V", JNI_FALSE);
+        MainActivity.onRenderConnectionChanged = FindMethodOrDie(env, MainActivity.self, "onRenderConnectionChanged", "()V", JNI_FALSE);
     }
 
     (*env)->GetJavaVM(env, &vm);

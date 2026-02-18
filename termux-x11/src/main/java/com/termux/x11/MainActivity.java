@@ -587,11 +587,6 @@ public class MainActivity extends LoriePreferences {
         }
         return false;
     }
-    void onRenderConnected(){
-        getLorieView().triggerCallback();
-        clientConnectedStateChanged();
-        getLorieView().reloadPreferences(prefs);
-    }
 
     public void setX11FocusedChanged(boolean x11Focused) {
         FullscreenWorkaround.setX11Focused(x11Focused);
@@ -912,6 +907,23 @@ public class MainActivity extends LoriePreferences {
             if (!connected) {
                 tryConnect();
             } else {
+                getLorieView().setPointerIcon(PointerIcon.getSystemIcon(this, PointerIcon.TYPE_NULL));
+                openPreference(false);
+            }
+
+            onWindowFocusChanged(hasWindowFocus());
+        });
+    }
+    void onRenderConnectionChanged(){
+        runOnUiThread(() -> {
+            boolean connected = LorieView.connected();
+            setTerminalToolbarView();
+            findViewById(R.id.mouse_buttons).setVisibility(prefs.showMouseHelper.get() && "1".equals(prefs.touchMode.get()) && connected ? VISIBLE : View.GONE);
+            findViewById(R.id.stub).setVisibility(connected ? View.INVISIBLE : VISIBLE);
+            getLorieView().setVisibility(connected ? VISIBLE : View.INVISIBLE);
+            MainActivity.mLorieViewConnected = connected;
+
+            if (connected) {
                 getLorieView().setPointerIcon(PointerIcon.getSystemIcon(this, PointerIcon.TYPE_NULL));
                 openPreference(false);
             }
