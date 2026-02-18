@@ -563,7 +563,6 @@ void rendererRedrawLocked(bool* waitingForBuffers) {
 
     if (eglSwapBuffers(egl_display, sfc) != EGL_TRUE)
         printEglError("Failed to swap buffers", __LINE__);
-    log("success to swap buffers");
     // Perform a little drawing operation to make sure the next buffer is ready on the next invocation of drawing
     glEnable(GL_SCISSOR_TEST);
     glScissor(0, 0, 1, 1);
@@ -619,12 +618,8 @@ __noreturn static void* rendererThread(void) {
     LorieBuffer* buf;
     bool waitingForBuffers = false;
     while (true) {
-
-
         while (rendererShouldWait(&waitingForBuffers)){
-            log("pthread_cond_start_wait");
             pthread_cond_wait(&stateCond, &stateLock);
-            log("pthread_cond_end_wait");
         }
 
         if (stateChanged) {
@@ -646,7 +641,6 @@ __noreturn static void* rendererThread(void) {
             }
 
             pthreadCondVarProxyListenOtherCondVar(state ? &state->cond : NULL);
-            log("pthreadCondVarProxyListenOtherCondVar:%p ",state);
             if (oldState)
                 munmap(oldState, sizeof(*oldState));
         }
@@ -665,15 +659,6 @@ __noreturn static void* rendererThread(void) {
 
         pthread_cond_signal(&stateChangeFinishCond);
         pthread_mutex_unlock(&stateLock);
-//        if(state){
-//            log("state:%p",state);
-//            log("state->surfaceAvailable:%d ",state->surfaceAvailable);
-//            log("!state->waitForNextFrame:%d ",!state->waitForNextFrame);
-//            log("state->drawRequested:%d ",state->drawRequested);
-//            log("state->cursor.moved:%d ",state->cursor.moved);
-//            log("state->cursor.updated:%d ",state->cursor.updated);
-//        }
-//        log("should rendererRedrawLocked:%d ",(state && state->surfaceAvailable && !state->waitForNextFrame && (state->drawRequested || state->cursor.moved || state->cursor.updated)));
         if (state && state->surfaceAvailable && !state->waitForNextFrame && (state->drawRequested || state->cursor.moved || state->cursor.updated))
             rendererRedrawLocked(&waitingForBuffers);
 
@@ -807,7 +792,6 @@ __noreturn static void* pthreadCondVarProxyThread(void* cookie) {
         }
         proxy.relocked = true;
         pthread_cond_signal(&stateCond);
-        log("pthreadCondVarProxyThread receive signal");
     }
 }
 

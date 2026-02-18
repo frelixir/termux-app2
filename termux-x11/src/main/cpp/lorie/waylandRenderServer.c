@@ -29,23 +29,13 @@
 #define min(a, b) (((a) < (b)) ? (a) : (b))
 
 extern int conn_fd;
-static struct xorg_list registeredWaylandBuffers;
+static struct lorie_shared_server_state *shared_state = NULL;
+static int shared_state_fd = -1;
 
 extern struct {
     jclass self;
     jmethodID getInstance, clientConnectedStateChanged, resetIme, onRenderConnected;
 } MainActivity;
-
-extern struct {
-    jclass self;
-    jmethodID forName;
-    jmethodID decode;
-} Charset;
-
-extern struct {
-    jclass self;
-    jmethodID toString;
-} CharBuffer;
 
 extern JNIEnv *guienv;
 extern jobject globalThiz;
@@ -63,7 +53,7 @@ static void waylandSendSharedServerState(int memfd) {
 static void waylandRegisterBuffer(LorieBuffer *buffer) {
     unsigned long id = LorieBuffer_description(buffer)->id;
     textureId=id;
-    if (conn_fd == -1 || LorieBufferList_findById(&registeredWaylandBuffers, id))
+    if (conn_fd == -1)
         return; // Already registered
 
     if (conn_fd != -1 && buffer) {
@@ -77,17 +67,23 @@ static void waylandRegisterBuffer(LorieBuffer *buffer) {
     }
 }
 
-static void waylandUnregisterBuffer(LorieBuffer *buffer) {
-    unsigned long id;
-    if (!buffer || (!LorieBufferList_findById(&registeredWaylandBuffers,
-                                              (id = LorieBuffer_description(buffer)->id))))
-        return;  // Not exist or not registered so no need to unregister
+static void cleanupSharedResources(void) {
+    if (shared_state) {
+        pthread_mutex_destroy(&shared_state->lock);
+        pthread_mutex_destroy(&shared_state->cursor.lock);
+        pthread_cond_destroy(&shared_state->cond);
 
-    if (conn_fd != -1 && buffer) {
-        LorieBuffer_removeFromList(buffer);
-        rendererSetSharedState(NULL);
-        rendererRemoveAllBuffers();
+        munmap(shared_state, sizeof(*shared_state));
+        shared_state = NULL;
     }
+
+    if (shared_state_fd != -1) {
+        close(shared_state_fd);
+        shared_state_fd = -1;
+    }
+
+    rendererSetSharedState(NULL);
+    rendererRemoveAllBuffers();
 }
 
 static int process(int fd) {
@@ -148,6 +144,9 @@ static int process(int fd) {
                             state->rootWindowTextureID=textureId;
                             waylandSendSharedServerState(stateFd);
                             rendererSetSharedState(state);
+
+                            shared_state = state;
+                            shared_state_fd = stateFd;
                             break;
                         }
                         case EVENT_APPLY_BUFFER: {
@@ -168,9 +167,8 @@ static int process(int fd) {
                                 (*env)->CallVoidMethod(env, instance, MainActivity.clientConnectedStateChanged);
                             break;
                         }
-                        case EVENT_DESTROY_BUFFER: {
-                            waylandUnregisterBuffer(LorieBufferList_findById(&registeredWaylandBuffers,
-                                                                             e.removeBuffer.id));
+                        case EVENT_STOP_RENDER:{
+                            cleanupSharedResources();
                             return 0;
                         }
                     }
@@ -182,9 +180,6 @@ static int process(int fd) {
                     }
                     perror("read");
                     return -1;
-                }else{
-//                    int cnt = read(fd,&e+nread,sizeof (e)-nread);
-//                    nread+=cnt;
                 }
             }
         }
@@ -254,7 +249,6 @@ static void startRenderServer(JavaVM *vm) {
 
 void waylandRenderInit(JavaVM *vm) {
     pthread_t t;
-    xorg_list_init(&registeredWaylandBuffers);
     JNIEnv *env;
     (*vm)->AttachCurrentThread(vm, &env, NULL);
     pthread_create(&t, NULL, (void *(*)(void *)) startRenderServer, vm);
