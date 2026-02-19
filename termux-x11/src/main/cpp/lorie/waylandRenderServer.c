@@ -27,10 +27,12 @@
 #define SOCKET_PATH "/data/data/com.termux/files/home/.wayland/unix_socket"
 #define log(prio, ...) __android_log_print(ANDROID_LOG_ ## prio, "LorieNative", __VA_ARGS__)
 #define min(a, b) (((a) < (b)) ? (a) : (b))
-
 extern int conn_fd;
+int event_fd;
 static struct lorie_shared_server_state *shared_state = NULL;
 static int shared_state_fd = -1;
+static volatile int client_pid = -1;
+static volatile int connection_alive = 1;
 
 extern struct {
     jclass self;
@@ -40,55 +42,74 @@ extern struct {
 extern JNIEnv *guienv;
 extern jobject globalThiz;
 
-static int textureId=0;
+static int textureId = 0;
 
 static void waylandSendSharedServerState(int memfd) {
-    if (conn_fd != -1) {
+    if (event_fd != -1) {
         lorieEvent e = {.type = EVENT_SHARED_SERVER_STATE};
-        write(conn_fd, &e, sizeof(e));
-        ancil_send_fd(conn_fd, memfd);
+        write(event_fd, &e, sizeof(e));
+        ancil_send_fd(event_fd, memfd);
     }
 }
 
 static void waylandRegisterBuffer(LorieBuffer *buffer) {
     unsigned long id = LorieBuffer_description(buffer)->id;
-    textureId=id;
-    if (conn_fd == -1)
+    textureId = id;
+    if (event_fd == -1)
         return; // Already registered
 
-    if (conn_fd != -1 && buffer) {
+    if (event_fd != -1 && buffer) {
         lorieEvent e = {.type = EVENT_ADD_BUFFER};
-        write(conn_fd, &e, sizeof(e));
-        LorieBuffer_sendHandleToUnixSocket(buffer, conn_fd);
+        write(event_fd, &e, sizeof(e));
+        LorieBuffer_sendHandleToUnixSocket(buffer, event_fd);
         rendererAddBuffer(buffer);
         const LorieBuffer_Desc *desc = LorieBuffer_description(buffer);
         log(INFO, "Sent shared buffer width %d stride %d height %d format %d type %d id %llu",
             desc->width, desc->stride, desc->height, desc->format, desc->type, desc->id);
     }
 }
+static void cleanupSharedResources(void);
+static void connectionCheckHandler(int signum) {
+    if (client_pid <= 0 || !connection_alive) {
+        return;
+    }
+
+    if (kill(client_pid, 0) == -1 && errno == ESRCH) {
+        connection_alive = 0;
+    }
+}
 
 static void cleanupSharedResources(void) {
-    if (shared_state) {
-        pthread_mutex_destroy(&shared_state->lock);
-        pthread_mutex_destroy(&shared_state->cursor.lock);
-        pthread_cond_destroy(&shared_state->cond);
+    struct itimerval timer = {0};
+    setitimer(ITIMER_REAL, &timer, NULL);
 
-        munmap(shared_state, sizeof(*shared_state));
-        shared_state = NULL;
-    }
+    connection_alive = 0;
+    client_pid = -1;
+
+    rendererSetSharedState(NULL);
 
     if (shared_state_fd != -1) {
         close(shared_state_fd);
         shared_state_fd = -1;
     }
-
-    rendererSetSharedState(NULL);
     rendererRemoveAllBuffers();
 
-    if(conn_fd){
-        close(conn_fd);
-        conn_fd=0;
+    if (event_fd != -1) {
+        close(event_fd);
+        event_fd = -1;
     }
+
+    if (conn_fd != -1) {
+        close(conn_fd);
+        conn_fd = -1;
+    }
+
+    jobject instance = (*guienv)->CallStaticObjectMethod(guienv,
+                                                      MainActivity.self,
+                                                      MainActivity.getInstance);
+    if (instance)
+        (*guienv)->CallVoidMethod(guienv, instance,
+                               MainActivity.onRenderConnectionChanged);
 }
 
 static int process(int fd) {
@@ -96,15 +117,39 @@ static int process(int fd) {
         return 0;
     }
 
+    connection_alive = 1;
+
+    struct sigaction sa;
+    sa.sa_handler = connectionCheckHandler;
+    sa.sa_flags = SA_RESTART;
+    sigemptyset(&sa.sa_mask);
+    sigaction(SIGALRM, &sa, NULL);
+
+    struct itimerval timer;
+    timer.it_value.tv_sec = 1;
+    timer.it_value.tv_usec = 0;
+    timer.it_interval.tv_sec = 1;
+    timer.it_interval.tv_usec = 0;
+    setitimer(ITIMER_REAL, &timer, NULL);
+
     struct pollfd pfd;
     pfd.fd = fd;
     pfd.events = POLLIN;
-    while (1) {
-        int ret = poll(&pfd, 1, -1);
+    while (connection_alive) {
+        int ret = poll(&pfd, 1, 1000);
         if (ret < 0) {
+            if (errno == EINTR) continue;
             perror("poll");
             return -1;
         }
+
+        if (!connection_alive) {
+            cleanupSharedResources();
+            log(DEBUG,"client killed");
+            return 0;
+        }
+
+        if (ret == 0) continue;
 
         if (pfd.revents & POLLIN) {
 
@@ -146,7 +191,7 @@ static int process(int fd) {
                             pthread_condattr_destroy(&cond_attr);
 
                             log(DEBUG, "lorie_shared_server_state:%p", state);
-                            state->rootWindowTextureID=textureId;
+                            state->rootWindowTextureID = textureId;
                             waylandSendSharedServerState(stateFd);
                             rendererSetSharedState(state);
 
@@ -156,7 +201,7 @@ static int process(int fd) {
                         }
                         case EVENT_APPLY_BUFFER: {
                             lorieEvent e2 = {0};
-                            read(fd,&e2, sizeof (e2));
+                            read(fd, &e2, sizeof(e2));
                             LorieBuffer *buffer = LorieBuffer_allocate(e2.screenSize.width,
                                                                        e2.screenSize.height,
                                                                        e2.screenSize.format,
@@ -164,23 +209,28 @@ static int process(int fd) {
                             waylandRegisterBuffer(buffer);
                             break;
                         }
-                        case EVENT_CLIENT_VERIFY_SUCCEED:{
+                        case EVENT_CLIENT_VERIFY_SUCCEED: {
+                            lorieEvent e1 = {0};
+                            read(fd, &e1, sizeof(e1));
+                            if (e1.client.pid > 0) {
+                                client_pid = e1.client.pid;
+                            }
                             JNIEnv *env = guienv;
-                            jobject thiz = globalThiz;
-                            jobject instance = (*env)->CallStaticObjectMethod(env, MainActivity.self, MainActivity.getInstance);
+                            jobject instance = (*env)->CallStaticObjectMethod(env,
+                                                                              MainActivity.self,
+                                                                              MainActivity.getInstance);
                             if (instance)
-                                (*env)->CallVoidMethod(env, instance, MainActivity.onRenderConnectionChanged);
+                                (*env)->CallVoidMethod(env, instance,
+                                                       MainActivity.onRenderConnectionChanged);
                             break;
                         }
-                        case EVENT_STOP_RENDER:{
+                        case EVENT_STOP_RENDER: {
                             cleanupSharedResources();
-                            JNIEnv *env = guienv;
-                            jobject thiz = globalThiz;
-                            jobject instance = (*env)->CallStaticObjectMethod(env, MainActivity.self, MainActivity.getInstance);
-                            if (instance)
-                                (*env)->CallVoidMethod(env, instance, MainActivity.onRenderConnectionChanged);
                             return 0;
                         }
+                        default:
+                            log(DEBUG, "Unknown event type: %d", e.type);
+                            break;
                     }
                 } else if (nread == 0) {
                     return 0;
@@ -198,7 +248,7 @@ static int process(int fd) {
 }
 
 static void startRenderServer(JavaVM *vm) {
-    conn_fd = -1;
+    event_fd = -1;
     int server_fd, client_fd, count;
     struct sockaddr_un address;
     uint8_t buffer[512] = {0};
@@ -241,9 +291,19 @@ static void startRenderServer(JavaVM *vm) {
         if (count > 0) {
             if (!memcmp(buffer, MAGIC, count < (int) sizeof(MAGIC) ? count : (int) sizeof(MAGIC))) {
                 log(DEBUG, "New client connection!");
+
+                if (event_fd != -1 && event_fd != client_fd) {
+                    log(DEBUG, "Disconnecting existing client");
+                    lorieEvent stop_event = {.type = EVENT_STOP_RENDER};
+                    write(event_fd, &stop_event, sizeof(stop_event));
+                    cleanupSharedResources();
+                    sleep(1);
+                }
+
                 lorieEvent e = {.type = EVENT_SERVER_VERIFY_SUCCEED};
                 write(client_fd, &e, sizeof(e));
-                conn_fd = client_fd;
+                event_fd = client_fd;
+                conn_fd = 0;
                 (*vm)->AttachCurrentThread(vm, &guienv, NULL);
                 process(client_fd);
             } else {
