@@ -104,9 +104,9 @@ typedef enum {
     EVENT_CLIPBOARD_SEND,
     EVENT_WINDOW_FOCUS_CHANGED,
     EVENT_APPLY_SERVER_STATE,
-    EVENT_DESTROY_SERVER_STATE,
     EVENT_APPLY_BUFFER,
-    EVENT_DESTROY_BUFFER,
+    EVENT_APPLY_EVENT_FD,
+    EVENT_SHARED_EVENT_FD,
     EVENT_SERVER_VERIFY_SUCCEED,
     EVENT_CLIENT_VERIFY_SUCCEED,
     EVENT_STOP_RENDER,
@@ -163,10 +163,6 @@ typedef union {
         uint8_t t;
         uint32_t count;
     } clipboardSend;
-    struct {
-        uint8_t t;
-        uint32_t pid;
-    } client;
 } lorieEvent;
 
 struct lorie_shared_server_state {

@@ -28,10 +28,9 @@
 #define log(prio, ...) __android_log_print(ANDROID_LOG_ ## prio, "LorieNative", __VA_ARGS__)
 #define min(a, b) (((a) < (b)) ? (a) : (b))
 extern int conn_fd;
-int event_fd;
+static int event_fd =- 1;
 static struct lorie_shared_server_state *shared_state = NULL;
 static int shared_state_fd = -1;
-static volatile int client_pid = -1;
 static volatile int connection_alive = 1;
 
 extern struct {
@@ -43,25 +42,24 @@ extern JNIEnv *guienv;
 extern jobject globalThiz;
 
 static int textureId = 0;
-
-static void waylandSendSharedServerState(int memfd) {
-    if (event_fd != -1) {
-        lorieEvent e = {.type = EVENT_SHARED_SERVER_STATE};
-        write(event_fd, &e, sizeof(e));
-        ancil_send_fd(event_fd, memfd);
-    }
+static bool renderConnectAlive(int fd) {
+    // Check if socket is closed or has errors.
+    struct pollfd p = { .fd = fd, .events = POLLIN | POLLHUP | POLLERR | POLLRDHUP };
+    return !(poll(&p, 1, 0) == 1 && (p.revents & (POLLERR | POLLNVAL | POLLRDHUP | POLLHUP)));
+}
+static void waylandSendSharedServerState(int fd, int memfd) {
+    lorieEvent e = {.type = EVENT_SHARED_SERVER_STATE};
+    write(fd, &e, sizeof(e));
+    ancil_send_fd(fd, memfd);
 }
 
-static void waylandRegisterBuffer(LorieBuffer *buffer) {
+static void waylandRegisterBuffer(int fd, LorieBuffer *buffer) {
     unsigned long id = LorieBuffer_description(buffer)->id;
     textureId = id;
-    if (event_fd == -1)
-        return; // Already registered
-
-    if (event_fd != -1 && buffer) {
+    if (buffer) {
         lorieEvent e = {.type = EVENT_ADD_BUFFER};
-        write(event_fd, &e, sizeof(e));
-        LorieBuffer_sendHandleToUnixSocket(buffer, event_fd);
+        write(fd, &e, sizeof(e));
+        LorieBuffer_sendHandleToUnixSocket(buffer, fd);
         rendererAddBuffer(buffer);
         const LorieBuffer_Desc *desc = LorieBuffer_description(buffer);
         log(INFO, "Sent shared buffer width %d stride %d height %d format %d type %d id %llu",
@@ -70,13 +68,7 @@ static void waylandRegisterBuffer(LorieBuffer *buffer) {
 }
 static void cleanupSharedResources(void);
 static void connectionCheckHandler(int signum) {
-    if (client_pid <= 0 || !connection_alive) {
-        return;
-    }
-
-    if (kill(client_pid, 0) == -1 && errno == ESRCH) {
-        connection_alive = 0;
-    }
+    connection_alive= renderConnectAlive(event_fd);
 }
 
 static void cleanupSharedResources(void) {
@@ -84,7 +76,6 @@ static void cleanupSharedResources(void) {
     setitimer(ITIMER_REAL, &timer, NULL);
 
     connection_alive = 0;
-    client_pid = -1;
 
     rendererSetSharedState(NULL);
 
@@ -93,11 +84,6 @@ static void cleanupSharedResources(void) {
         shared_state_fd = -1;
     }
     rendererRemoveAllBuffers();
-
-    if (event_fd != -1) {
-        close(event_fd);
-        event_fd = -1;
-    }
 
     if (conn_fd != -1) {
         close(conn_fd);
@@ -136,7 +122,8 @@ static int process(int fd) {
     pfd.fd = fd;
     pfd.events = POLLIN;
     while (connection_alive) {
-        int ret = poll(&pfd, 1, 1000);
+        log(DEBUG,"poll");
+        int ret = poll(&pfd, 1, -1);
         if (ret < 0) {
             if (errno == EINTR) continue;
             perror("poll");
@@ -158,18 +145,28 @@ static int process(int fd) {
                 ssize_t nread = read(fd, &e, sizeof(e));
                 if (nread == sizeof(e)) {
                     switch (e.type) {
+                        case EVENT_APPLY_BUFFER: {
+                            lorieEvent e2 = {0};
+                            read(fd, &e2, sizeof(e2));
+                            LorieBuffer *buffer = LorieBuffer_allocate(e2.screenSize.width,
+                                                                       e2.screenSize.height,
+                                                                       e2.screenSize.format,
+                                                                       e2.screenSize.type);
+                            waylandRegisterBuffer(fd,buffer);
+                            break;
+                        }
                         case EVENT_APPLY_SERVER_STATE: {
                             struct lorie_shared_server_state *state = NULL;
                             int stateFd = LorieBuffer_createRegion("wayland", sizeof(*state));
                             if (stateFd == -1) {
-                                dprintf(2, "FATAL: Failed to allocate server state.\n");
+                                log(ERROR, "FATAL: Failed to allocate server state.");
                                 _exit(1);
                             }
 
                             state = mmap(NULL, sizeof(*state), PROT_READ | PROT_WRITE, MAP_SHARED,
                                          stateFd, 0);
                             if (state == MAP_FAILED) {
-                                dprintf(2, "FATAL: Failed to map server state.\n");
+                                log(ERROR, "FATAL: Failed to map server state.");
                                 _exit(1);
                             }
 
@@ -192,29 +189,26 @@ static int process(int fd) {
 
                             log(DEBUG, "lorie_shared_server_state:%p", state);
                             state->rootWindowTextureID = textureId;
-                            waylandSendSharedServerState(stateFd);
+                            waylandSendSharedServerState(fd,stateFd);
                             rendererSetSharedState(state);
 
                             shared_state = state;
                             shared_state_fd = stateFd;
                             break;
                         }
-                        case EVENT_APPLY_BUFFER: {
-                            lorieEvent e2 = {0};
-                            read(fd, &e2, sizeof(e2));
-                            LorieBuffer *buffer = LorieBuffer_allocate(e2.screenSize.width,
-                                                                       e2.screenSize.height,
-                                                                       e2.screenSize.format,
-                                                                       e2.screenSize.type);
-                            waylandRegisterBuffer(buffer);
+                        case EVENT_APPLY_EVENT_FD:{
+                            lorieEvent e1 = {.type = EVENT_SHARED_EVENT_FD};
+                            if (write(event_fd, &e1, sizeof(e1)) != sizeof(e1)) {
+                                log(ERROR, "Failed to send SHARED_EVENT_FD");
+                                _exit(1);
+                            }
+                            int client[2];
+                            socketpair(AF_UNIX, SOCK_STREAM, 0, client);
+                            conn_fd=client[0];
+                            ancil_send_fd(fd,client[1]);
                             break;
                         }
                         case EVENT_CLIENT_VERIFY_SUCCEED: {
-                            lorieEvent e1 = {0};
-                            read(fd, &e1, sizeof(e1));
-                            if (e1.client.pid > 0) {
-                                client_pid = e1.client.pid;
-                            }
                             JNIEnv *env = guienv;
                             jobject instance = (*env)->CallStaticObjectMethod(env,
                                                                               MainActivity.self,
@@ -233,22 +227,23 @@ static int process(int fd) {
                             break;
                     }
                 } else if (nread == 0) {
+                    cleanupSharedResources();
                     return 0;
                 } else if (nread < 0) {
                     if (errno == EAGAIN || errno == EWOULDBLOCK) {
                         break;
                     }
-                    perror("read");
+                    log(ERROR,"read error");
                     return -1;
                 }
             }
         }
     }
+    cleanupSharedResources();
     return 0;
 }
 
 static void startRenderServer(JavaVM *vm) {
-    event_fd = -1;
     int server_fd, client_fd, count;
     struct sockaddr_un address;
     uint8_t buffer[512] = {0};
@@ -291,21 +286,15 @@ static void startRenderServer(JavaVM *vm) {
         if (count > 0) {
             if (!memcmp(buffer, MAGIC, count < (int) sizeof(MAGIC) ? count : (int) sizeof(MAGIC))) {
                 log(DEBUG, "New client connection!");
-
-                if (event_fd != -1 && event_fd != client_fd) {
-                    log(DEBUG, "Disconnecting existing client");
-                    lorieEvent stop_event = {.type = EVENT_STOP_RENDER};
-                    write(event_fd, &stop_event, sizeof(stop_event));
-                    cleanupSharedResources();
-                    sleep(1);
-                }
-
                 lorieEvent e = {.type = EVENT_SERVER_VERIFY_SUCCEED};
                 write(client_fd, &e, sizeof(e));
-                event_fd = client_fd;
-                conn_fd = 0;
+                conn_fd = 1;
+                event_fd=client_fd;
                 (*vm)->AttachCurrentThread(vm, &guienv, NULL);
                 process(client_fd);
+                close(client_fd);
+                event_fd=-1;
+                (*vm)->DetachCurrentThread(vm);
             } else {
                 close(client_fd);
                 log(ERROR, "Invalid client connection!");
