@@ -19,12 +19,13 @@
 #include <stdlib.h>
 #include <fcntl.h>
 #include <sys/ioctl.h>
+#include <sys/stat.h>
 #include "waylandRenderServer.h"
 #include "buffer.h"
 #include "lorie.h"
 
 #define MAX_WAITING_CONNECT_CLIENTS 5
-#define SOCKET_PATH "/data/data/com.termux/files/home/.wayland/unix_socket"
+#define SOCKET_PATH "/data/data/com.termux/files/usr/tmp/wayland-0"
 #define log(prio, ...) __android_log_print(ANDROID_LOG_ ## prio, "LorieNative", __VA_ARGS__)
 #define min(a, b) (((a) < (b)) ? (a) : (b))
 extern int conn_fd;
@@ -255,6 +256,14 @@ static void startRenderServer(JavaVM *vm) {
         return;
     }
 
+    // 确保目录存在
+    char socket_dir[] = "/data/data/com.termux/files/usr/tmp";
+    if (access(socket_dir, F_OK) != 0) {
+        if (mkdir(socket_dir, 0755) != 0) {
+            log(ERROR, "Failed to create socket directory: %s", strerror(errno));
+        }
+    }
+    
     // 绑定socket文件路径，先unlink避免路径已存在
     unlink(SOCKET_PATH);
     memset(&address, 0, sizeof(address));
