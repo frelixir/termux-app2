@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="980" height="260" viewBox="0 0 980 260">
+  <defs>
+    <marker id="arch8_arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L9,3 z" fill="#333"/>
+    </marker>
+    <style>
+      .arch8_box { fill:#f7f9fc; stroke:#2f3a4a; stroke-width:1.3; }
+      .arch8_java { fill:#e8f3ff; }
+      .arch8_native { fill:#f0ecff; }
+      .arch8_text { font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif; font-size:14px; fill:#1d2630; }
+      .arch8_title { font-size:16px; font-weight:600; }
+      .arch8_line { stroke:#333; stroke-width:1.4; marker-end:url(#arch8_arrow); fill:none; }
+    </style>
+  </defs>
+  <rect x="40" y="85" width="190" height="65" rx="8" class="arch8_box arch8_java"/>
+  <text x="65" y="111" class="arch8_text arch8_title">Android input</text>
+  <text x="65" y="132" class="arch8_text">touch / key / stylus / mouse</text>
+
+  <rect x="280" y="85" width="230" height="65" rx="8" class="arch8_box arch8_java"/>
+  <text x="305" y="111" class="arch8_text">MainActivity</text>
+  <text x="305" y="132" class="arch8_text">TouchInputHandler / InputEventSender</text>
+
+  <rect x="560" y="85" width="175" height="65" rx="8" class="arch8_box"/>
+  <text x="585" y="111" class="arch8_text">LorieView</text>
+  <text x="585" y="132" class="arch8_text">native methods</text>
+
+  <rect x="785" y="45" width="155" height="55" rx="8" class="arch8_box arch8_native"/>
+  <text x="815" y="79" class="arch8_text">lorieEvent</text>
+  <rect x="785" y="135" width="155" height="55" rx="8" class="arch8_box arch8_native"/>
+  <text x="815" y="169" class="arch8_text">X server thread</text>
+  <rect x="560" y="180" width="240" height="55" rx="8" class="arch8_box arch8_native"/>
+  <text x="585" y="203" class="arch8_text">QueuePointerEvents</text>
+  <text x="585" y="223" class="arch8_text">QueueKeyboardEvents / QueueTouchEvents</text>
+
+  <path d="M230 117 L280 117" class="arch8_line"/>
+  <path d="M510 117 L560 117" class="arch8_line"/>
+  <path d="M735 117 C760 100 760 80 785 72" class="arch8_line"/>
+  <path d="M862 100 L862 135" class="arch8_line"/>
+  <path d="M785 162 C750 178 820 185 800 207" class="arch8_line"/>
+</svg>

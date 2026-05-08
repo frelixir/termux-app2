@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="980" height="470" viewBox="0 0 980 470">
+  <defs>
+    <marker id="arrow2" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L9,3 z" fill="#333"/>
+    </marker>
+    <style>
+      .box { fill:#f7f9fc; stroke:#2f3a4a; stroke-width:1.4; rx:8; }
+      .bad { fill:#ffe9e6; }
+      .good { fill:#e9f7ef; }
+      .text { font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif; font-size:14px; fill:#1d2630; }
+      .title { font-size:16px; font-weight:600; }
+      .line { stroke:#333; stroke-width:1.5; marker-end:url(#arrow2); fill:none; }
+    </style>
+  </defs>
+
+  <text x="60" y="35" class="text title">当前</text>
+  <rect x="60" y="55" width="310" height="85" class="box bad"/>
+  <text x="85" y="88" class="text title">TermuxActivity</text>
+  <text x="85" y="115" class="text">extends com.termux.x11.MainActivity</text>
+  <rect x="95" y="180" width="240" height="75" class="box bad"/>
+  <text x="120" y="214" class="text">super.onCreate()</text>
+  <text x="120" y="236" class="text">inflate X11 main_activity</text>
+  <rect x="95" y="295" width="240" height="75" class="box bad"/>
+  <text x="120" y="329" class="text">setContentView(app layout)</text>
+  <text x="120" y="351" class="text">搬运 lorieContentView</text>
+  <path d="M215 140 L215 180" class="line"/>
+  <path d="M215 255 L215 295" class="line"/>
+
+  <text x="560" y="35" class="text title">V2</text>
+  <rect x="520" y="55" width="340" height="85" class="box good"/>
+  <text x="545" y="88" class="text title">TermuxActivity</text>
+  <text x="545" y="115" class="text">extends AppCompatActivity</text>
+  <rect x="520" y="180" width="340" height="75" class="box good"/>
+  <text x="545" y="214" class="text">setContentView(app layout)</text>
+  <text x="545" y="236" class="text">中间容器直接嵌入 X11DisplayView</text>
+  <rect x="520" y="295" width="340" height="75" class="box good"/>
+  <text x="545" y="329" class="text">X11DisplayController.attach()</text>
+  <text x="545" y="351" class="text">连接已有 X server / Surface</text>
+  <path d="M690 140 L690 180" class="line"/>
+  <path d="M690 255 L690 295" class="line"/>
+</svg>

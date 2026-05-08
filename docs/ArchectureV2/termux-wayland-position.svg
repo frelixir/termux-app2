@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="980" height="300" viewBox="0 0 980 300">
+  <defs>
+    <marker id="arrow7" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L9,3 z" fill="#333"/>
+    </marker>
+    <style>
+      .box { fill:#f7f9fc; stroke:#2f3a4a; stroke-width:1.3; rx:8; }
+      .pkg { fill:#e8f3ff; }
+      .bridge { fill:#fff3d9; }
+      .renderer { fill:#eaf7ee; }
+      .text { font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif; font-size:14px; fill:#1d2630; }
+      .title { font-size:16px; font-weight:600; }
+      .line { stroke:#333; stroke-width:1.4; marker-end:url(#arrow7); fill:none; }
+    </style>
+  </defs>
+
+  <rect x="55" y="90" width="220" height="90" class="box pkg"/>
+  <text x="80" y="126" class="text title">termux-package software</text>
+  <text x="80" y="153" class="text">生态内图形客户端</text>
+
+  <rect x="380" y="90" width="220" height="90" class="box bridge"/>
+  <text x="405" y="126" class="text title">:termux-wayland</text>
+  <text x="405" y="153" class="text">package display bridge</text>
+
+  <rect x="705" y="90" width="220" height="90" class="box renderer"/>
+  <text x="730" y="126" class="text title">display renderer/protocol</text>
+  <text x="730" y="153" class="text">unix socket / shared buffer</text>
+
+  <path d="M275 135 L380 135" class="line"/>
+  <path d="M600 135 L705 135" class="line"/>
+</svg>

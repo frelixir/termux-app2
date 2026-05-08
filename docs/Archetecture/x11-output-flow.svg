@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="980" height="290" viewBox="0 0 980 290">
+  <defs>
+    <marker id="arch9_arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L9,3 z" fill="#333"/>
+    </marker>
+    <style>
+      .arch9_box { fill:#f7f9fc; stroke:#2f3a4a; stroke-width:1.3; }
+      .arch9_native { fill:#f0ecff; }
+      .arch9_java { fill:#eaf7ee; }
+      .arch9_text { font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif; font-size:14px; fill:#1d2630; }
+      .arch9_title { font-size:16px; font-weight:600; }
+      .arch9_line { stroke:#333; stroke-width:1.4; marker-end:url(#arch9_arrow); fill:none; }
+    </style>
+  </defs>
+  <rect x="40" y="70" width="210" height="65" rx="8" class="arch9_box arch9_native"/>
+  <text x="65" y="96" class="arch9_text arch9_title">X server</text>
+  <text x="65" y="117" class="arch9_text">root pixmap / cursor</text>
+
+  <rect x="300" y="70" width="220" height="65" rx="8" class="arch9_box arch9_native"/>
+  <text x="325" y="96" class="arch9_text">LorieBuffer</text>
+  <text x="325" y="117" class="arch9_text">shared server state</text>
+
+  <rect x="570" y="70" width="170" height="65" rx="8" class="arch9_box arch9_native"/>
+  <text x="595" y="96" class="arch9_text">unix socket</text>
+  <text x="595" y="117" class="arch9_text">fd passing</text>
+
+  <rect x="790" y="70" width="150" height="65" rx="8" class="arch9_box arch9_native"/>
+  <text x="815" y="107" class="arch9_text">activity.c ALooper</text>
+
+  <rect x="570" y="180" width="250" height="65" rx="8" class="arch9_box arch9_native"/>
+  <text x="595" y="206" class="arch9_text">rendererAddBuffer</text>
+  <text x="595" y="227" class="arch9_text">rendererSetSharedState</text>
+
+  <rect x="350" y="180" width="160" height="65" rx="8" class="arch9_box arch9_native"/>
+  <text x="395" y="217" class="arch9_text">EGL / GLES</text>
+
+  <rect x="80" y="180" width="220" height="65" rx="8" class="arch9_box arch9_java"/>
+  <text x="105" y="217" class="arch9_text">Android Surface from LorieView</text>
+
+  <path d="M250 102 L300 102" class="arch9_line"/>
+  <path d="M520 102 L570 102" class="arch9_line"/>
+  <path d="M740 102 L790 102" class="arch9_line"/>
+  <path d="M865 135 C865 175 850 190 820 212" class="arch9_line"/>
+  <path d="M570 212 L510 212" class="arch9_line"/>
+  <path d="M350 212 L300 212" class="arch9_line"/>
+</svg>

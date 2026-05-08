@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="980" height="330" viewBox="0 0 980 330">
+  <defs>
+    <style>
+      .outer { fill:#ffffff; stroke:#2f3a4a; stroke-width:1.5; rx:10; }
+      .panel { stroke:#2f3a4a; stroke-width:1.2; rx:8; }
+      .left { fill:#e8f3ff; }
+      .center { fill:#eaf7ee; }
+      .right { fill:#fff3d9; }
+      .inner { fill:#ffffff; stroke:#607080; stroke-width:1; rx:6; }
+      .text { font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif; font-size:14px; fill:#1d2630; }
+      .title { font-size:16px; font-weight:600; }
+    </style>
+  </defs>
+  <rect x="40" y="35" width="900" height="250" class="outer"/>
+  <text x="65" y="67" class="text title">TermuxActivity / DisplaySlidingWindow</text>
+
+  <rect x="65" y="95" width="245" height="160" class="panel left"/>
+  <text x="90" y="130" class="text title">Left Panel</text>
+  <text x="90" y="160" class="text">TerminalView</text>
+  <text x="90" y="184" class="text">Session drawer</text>
+  <text x="90" y="208" class="text">Terminal toolbar</text>
+
+  <rect x="355" y="95" width="270" height="160" class="panel center"/>
+  <text x="380" y="130" class="text title">Center Panel</text>
+  <rect x="382" y="150" width="216" height="78" class="inner"/>
+  <text x="405" y="180" class="text">X11DisplayView</text>
+  <text x="405" y="204" class="text">LorieView + overlays</text>
+
+  <rect x="670" y="95" width="245" height="160" class="panel right"/>
+  <text x="695" y="130" class="text title">Right Panel</text>
+  <text x="695" y="160" class="text">X11PreferencePanel</text>
+  <text x="695" y="184" class="text">LoriePreferenceFragment</text>
+</svg>

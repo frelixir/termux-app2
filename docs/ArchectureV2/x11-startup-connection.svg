@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="980" height="380" viewBox="0 0 980 380">
+  <defs>
+    <marker id="arrow3" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L9,3 z" fill="#333"/>
+    </marker>
+    <style>
+      .box { fill:#f7f9fc; stroke:#2f3a4a; stroke-width:1.3; rx:8; }
+      .app { fill:#e8f3ff; }
+      .x11 { fill:#eaf7ee; }
+      .native { fill:#f0ecff; }
+      .text { font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif; font-size:14px; fill:#1d2630; }
+      .title { font-size:16px; font-weight:600; }
+      .line { stroke:#333; stroke-width:1.4; marker-end:url(#arrow3); fill:none; }
+    </style>
+  </defs>
+
+  <rect x="40" y="60" width="170" height="80" class="box app"/>
+  <text x="65" y="94" class="text title">TermuxService</text>
+  <text x="65" y="119" class="text">exec termux-x11 :1</text>
+
+  <rect x="260" y="60" width="150" height="80" class="box"/>
+  <text x="285" y="94" class="text title">shell-loader</text>
+  <text x="285" y="119" class="text">load CmdEntryPoint</text>
+
+  <rect x="460" y="60" width="160" height="80" class="box x11"/>
+  <text x="485" y="94" class="text title">CmdEntryPoint</text>
+  <text x="485" y="119" class="text">start Xlorie</text>
+
+  <rect x="675" y="60" width="190" height="80" class="box native"/>
+  <text x="700" y="94" class="text title">native X server</text>
+  <text x="700" y="119" class="text">dix_main / Xorg</text>
+
+  <rect x="460" y="220" width="190" height="85" class="box x11"/>
+  <text x="485" y="255" class="text title">X11ServerConnector</text>
+  <text x="485" y="280" class="text">binder + fd</text>
+
+  <rect x="700" y="220" width="190" height="85" class="box x11"/>
+  <text x="725" y="255" class="text title">X11DisplayView</text>
+  <text x="725" y="280" class="text">LorieView.connect(fd)</text>
+
+  <path d="M210 100 L260 100" class="line"/>
+  <path d="M410 100 L460 100" class="line"/>
+  <path d="M620 100 L675 100" class="line"/>
+  <path d="M770 140 C770 185 620 185 560 220" class="line"/>
+  <path d="M650 262 L700 262" class="line"/>
+</svg>

@@ -1,0 +1,62 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="980" height="420" viewBox="0 0 980 420">
+  <defs>
+    <marker id="arch6_arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L9,3 z" fill="#333"/>
+    </marker>
+    <style>
+      .arch6_box { fill:#f7f9fc; stroke:#2f3a4a; stroke-width:1.3; }
+      .arch6_input { fill:#e8f3ff; }
+      .arch6_output { fill:#eaf7ee; }
+      .arch6_text { font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif; font-size:14px; fill:#1d2630; }
+      .arch6_title { font-size:16px; font-weight:600; }
+      .arch6_line { stroke:#333; stroke-width:1.4; marker-end:url(#arch6_arrow); fill:none; }
+    </style>
+  </defs>
+  <rect x="40" y="45" width="130" height="55" rx="8" class="arch6_box arch6_input"/>
+  <text x="75" y="80" class="arch6_text arch6_title">用户输入</text>
+  <rect x="220" y="45" width="230" height="55" rx="8" class="arch6_box"/>
+  <text x="245" y="80" class="arch6_text">TerminalView / ExtraKeys / KeyHandler</text>
+  <rect x="500" y="45" width="180" height="55" rx="8" class="arch6_box"/>
+  <text x="525" y="80" class="arch6_text">TerminalSession.write()</text>
+  <rect x="730" y="45" width="210" height="55" rx="8" class="arch6_box"/>
+  <text x="755" y="72" class="arch6_text">ByteQueue</text>
+  <text x="755" y="92" class="arch6_text">terminalToProcess</text>
+  <rect x="500" y="125" width="180" height="55" rx="8" class="arch6_box"/>
+  <text x="525" y="160" class="arch6_text">PTY writer thread</text>
+  <rect x="730" y="125" width="210" height="55" rx="8" class="arch6_box"/>
+  <text x="755" y="160" class="arch6_text">shell process</text>
+
+  <rect x="40" y="255" width="130" height="55" rx="8" class="arch6_box arch6_output"/>
+  <text x="75" y="290" class="arch6_text arch6_title">shell 输出</text>
+  <rect x="220" y="255" width="160" height="55" rx="8" class="arch6_box"/>
+  <text x="245" y="290" class="arch6_text">PTY reader thread</text>
+  <rect x="430" y="255" width="190" height="55" rx="8" class="arch6_box"/>
+  <text x="455" y="282" class="arch6_text">ByteQueue</text>
+  <text x="455" y="302" class="arch6_text">processToTerminal</text>
+  <rect x="670" y="255" width="170" height="55" rx="8" class="arch6_box"/>
+  <text x="695" y="290" class="arch6_text">main thread Handler</text>
+
+  <rect x="220" y="340" width="190" height="55" rx="8" class="arch6_box"/>
+  <text x="245" y="375" class="arch6_text">TerminalEmulator.append()</text>
+  <rect x="460" y="340" width="145" height="55" rx="8" class="arch6_box"/>
+  <text x="485" y="375" class="arch6_text">TerminalBuffer</text>
+  <rect x="655" y="340" width="155" height="55" rx="8" class="arch6_box"/>
+  <text x="680" y="375" class="arch6_text">TerminalView.onDraw()</text>
+  <rect x="835" y="340" width="125" height="55" rx="8" class="arch6_box"/>
+  <text x="850" y="365" class="arch6_text">TerminalRenderer</text>
+  <text x="850" y="385" class="arch6_text">render(Canvas)</text>
+
+  <path d="M170 72 L220 72" class="arch6_line"/>
+  <path d="M450 72 L500 72" class="arch6_line"/>
+  <path d="M680 72 L730 72" class="arch6_line"/>
+  <path d="M835 100 C835 130 720 135 680 152" class="arch6_line"/>
+  <path d="M680 152 L730 152" class="arch6_line"/>
+
+  <path d="M170 282 L220 282" class="arch6_line"/>
+  <path d="M380 282 L430 282" class="arch6_line"/>
+  <path d="M620 282 L670 282" class="arch6_line"/>
+  <path d="M755 310 C755 337 455 330 380 340" class="arch6_line"/>
+  <path d="M410 367 L460 367" class="arch6_line"/>
+  <path d="M605 367 L655 367" class="arch6_line"/>
+  <path d="M810 367 L835 367" class="arch6_line"/>
+</svg>

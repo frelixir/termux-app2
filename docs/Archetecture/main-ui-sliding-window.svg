@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="980" height="290" viewBox="0 0 980 290">
+  <style>
+    .arch2_outer { fill:#fff; stroke:#2f3a4a; stroke-width:1.5; }
+    .arch2_panel { stroke:#2f3a4a; stroke-width:1.2; }
+    .arch2_left { fill:#e8f3ff; }
+    .arch2_center { fill:#eaf7ee; }
+    .arch2_right { fill:#fff3d9; }
+    .arch2_text { font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif; font-size:14px; fill:#1d2630; }
+    .arch2_title { font-size:16px; font-weight:600; }
+  </style>
+  <rect x="45" y="35" width="890" height="215" rx="10" class="arch2_outer"/>
+  <text x="70" y="70" class="arch2_text arch2_title">DisplaySlidingWindow</text>
+
+  <rect x="75" y="95" width="250" height="115" rx="8" class="arch2_panel arch2_left"/>
+  <text x="100" y="130" class="arch2_text arch2_title">left</text>
+  <text x="100" y="158" class="arch2_text">activity_termux.xml</text>
+  <text x="100" y="183" class="arch2_text">终端 / drawer / session list / toolbar</text>
+
+  <rect x="365" y="95" width="250" height="115" rx="8" class="arch2_panel arch2_center"/>
+  <text x="390" y="130" class="arch2_text arch2_title">center</text>
+  <text x="390" y="158" class="arch2_text">display_window.xml</text>
+  <text x="390" y="183" class="arch2_text">X11 / Lorie 显示窗口</text>
+
+  <rect x="655" y="95" width="250" height="115" rx="8" class="arch2_panel arch2_right"/>
+  <text x="680" y="130" class="arch2_text arch2_title">right</text>
+  <text x="680" y="158" class="arch2_text">window_preference.xml</text>
+  <text x="680" y="183" class="arch2_text">X11 preference fragment</text>
+</svg>

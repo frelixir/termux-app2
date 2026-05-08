@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="980" height="380" viewBox="0 0 980 380">
+  <defs>
+    <marker id="arrow6" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L9,3 z" fill="#333"/>
+    </marker>
+    <style>
+      .box { fill:#f7f9fc; stroke:#2f3a4a; stroke-width:1.3; rx:8; }
+      .app { fill:#e8f3ff; }
+      .service { fill:#fff3d9; }
+      .x11 { fill:#eaf7ee; }
+      .text { font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif; font-size:14px; fill:#1d2630; }
+      .title { font-size:16px; font-weight:600; }
+      .line { stroke:#333; stroke-width:1.4; marker-end:url(#arrow6); fill:none; }
+      .dash { stroke:#666; stroke-width:1.3; stroke-dasharray:6 5; marker-end:url(#arrow6); fill:none; }
+    </style>
+  </defs>
+
+  <rect x="50" y="55" width="210" height="85" class="box app"/>
+  <text x="75" y="90" class="text title">TermuxActivity</text>
+  <text x="75" y="116" class="text">create / recreate</text>
+
+  <rect x="385" y="55" width="220" height="85" class="box x11"/>
+  <text x="410" y="90" class="text title">X11DisplayView</text>
+  <text x="410" y="116" class="text">attach Surface/Input</text>
+
+  <rect x="710" y="55" width="210" height="85" class="box service"/>
+  <text x="735" y="90" class="text title">TermuxService</text>
+  <text x="735" y="116" class="text">foreground owner</text>
+
+  <rect x="385" y="230" width="220" height="85" class="box x11"/>
+  <text x="410" y="265" class="text title">X server session</text>
+  <text x="410" y="291" class="text">continues without Activity</text>
+
+  <path d="M260 98 L385 98" class="line"/>
+  <path d="M605 98 L710 98" class="line"/>
+  <path d="M815 140 C815 225 650 255 605 272" class="line"/>
+  <path d="M495 230 C495 185 495 170 495 140" class="dash"/>
+  <text x="85" y="205" class="text">onDestroy / rotate: detach only</text>
+  <path d="M160 140 C160 245 320 270 385 272" class="dash"/>
+</svg>

@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="980" height="360" viewBox="0 0 980 360">
+  <defs>
+    <marker id="arch1_arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L9,3 z" fill="#333"/>
+    </marker>
+    <style>
+      .arch1_box { fill:#f7f9fc; stroke:#2f3a4a; stroke-width:1.3; }
+      .arch1_app { fill:#e8f3ff; }
+      .arch1_x11 { fill:#eaf7ee; }
+      .arch1_text { font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif; font-size:14px; fill:#1d2630; }
+      .arch1_title { font-size:16px; font-weight:600; }
+      .arch1_line { stroke:#333; stroke-width:1.4; marker-end:url(#arch1_arrow); fill:none; }
+    </style>
+  </defs>
+  <rect x="50" y="45" width="180" height="70" rx="8" class="arch1_box arch1_app"/>
+  <text x="78" y="88" class="arch1_text arch1_title">:app</text>
+
+  <rect x="320" y="35" width="190" height="70" rx="8" class="arch1_box"/>
+  <text x="348" y="78" class="arch1_text arch1_title">:terminal-view</text>
+
+  <rect x="620" y="35" width="220" height="70" rx="8" class="arch1_box"/>
+  <text x="648" y="78" class="arch1_text arch1_title">:terminal-emulator</text>
+
+  <rect x="320" y="140" width="190" height="70" rx="8" class="arch1_box"/>
+  <text x="348" y="183" class="arch1_text arch1_title">:termux-shared</text>
+
+  <rect x="320" y="245" width="190" height="70" rx="8" class="arch1_box arch1_x11"/>
+  <text x="348" y="288" class="arch1_text arch1_title">:termux-x11</text>
+
+  <rect x="620" y="245" width="220" height="70" rx="8" class="arch1_box"/>
+  <text x="648" y="288" class="arch1_text arch1_title">:shell-loader:stub</text>
+
+  <rect x="50" y="245" width="180" height="70" rx="8" class="arch1_box"/>
+  <text x="78" y="288" class="arch1_text arch1_title">:float-ball</text>
+
+  <path d="M230 80 L320 70" class="arch1_line"/>
+  <path d="M510 70 L620 70" class="arch1_line"/>
+  <path d="M230 85 C260 130 285 155 320 170" class="arch1_line"/>
+  <path d="M415 140 L415 105" class="arch1_line"/>
+  <path d="M230 95 C255 180 280 250 320 278" class="arch1_line"/>
+  <path d="M140 115 L140 245" class="arch1_line"/>
+  <path d="M510 280 L620 280" class="arch1_line"/>
+  <text x="650" y="317" class="arch1_text">compileOnly</text>
+</svg>
