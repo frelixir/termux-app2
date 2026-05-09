@@ -1,5 +1,7 @@
 package com.termux.app;
 
+import com.termux.x11.LorieViewRuntimeApi;
+
 import static android.content.pm.ActivityInfo.SCREEN_ORIENTATION_PORTRAIT;
 import static com.termux.shared.termux.TermuxConstants.TERMUX_FILES_DIR_PATH;
 import static com.termux.shared.termux.TermuxConstants.TERMUX_HOME_DIR_PATH;
@@ -28,10 +30,8 @@ import android.preference.PreferenceManager;
 import android.view.ContextMenu;
 import android.view.ContextMenu.ContextMenuInfo;
 import android.view.Gravity;
-import android.view.InputDevice;
 import android.view.Menu;
 import android.view.MenuItem;
-import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.Window;
@@ -46,17 +46,19 @@ import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.view.GravityCompat;
 import androidx.drawerlayout.widget.DrawerLayout;
+import androidx.preference.Preference;
+import androidx.preference.PreferenceFragmentCompat;
 import androidx.viewpager.widget.ViewPager;
 
 import com.termux.R;
 import com.termux.app.activities.HelpActivity;
 import com.termux.app.activities.SettingsActivity;
 import com.termux.app.api.file.FileReceiverActivity;
-import com.termux.app.terminal.DisplaySlidingWindow;
-import com.termux.app.terminal.DisplayWindowLinearLayout;
 import com.termux.app.terminal.FloatBallMenuClient;
+import com.termux.app.terminal.MainSurfaceController;
 import com.termux.app.terminal.MenuEntryClient;
 import com.termux.app.terminal.StartEntryClient;
 import com.termux.app.terminal.TermuxActivityRootView;
@@ -91,7 +93,9 @@ import com.termux.terminal.TerminalSession;
 import com.termux.terminal.TerminalSessionClient;
 import com.termux.view.TerminalView;
 import com.termux.view.TerminalViewClient;
-import com.termux.x11.MainActivity;
+import com.termux.x11.TermuxScreenView;
+import com.termux.x11.LoriePreferences;
+import com.termux.x11.LorieViewRuntimeController;
 import com.termux.x11.controller.winhandler.ProcessInfo;
 
 import java.io.BufferedReader;
@@ -112,10 +116,11 @@ import java.util.List;
  * </ul>
  * about memory leaks.
  */
-public class TermuxActivity extends com.termux.x11.MainActivity implements ServiceConnection {
+public class TermuxActivity extends AppCompatActivity implements ServiceConnection, LorieViewRuntimeApi.Host, PreferenceFragmentCompat.OnPreferenceStartFragmentCallback {
     private static final int FILE_REQUEST_BACKUP_CODE = 101;
 
-    private DisplaySlidingWindow mMainContentView;
+    private MainSurfaceController mMainSurfaceController;
+    private LorieViewRuntimeController mLorieViewRuntimeController;
     /**
      * The connection to the {@link TermuxService}. Requested in {@link #onCreate(Bundle)} with a call to
      * {@link #bindService(Intent, ServiceConnection, int)}, and obtained and stored in
@@ -232,62 +237,150 @@ public class TermuxActivity extends com.termux.x11.MainActivity implements Servi
     private static final String LOG_TAG = "TermuxActivity";
     private FloatBallMenuClient mFloatBallMenuClient;
 
+    private LorieViewRuntimeController getLorieViewRuntime() {
+        return mLorieViewRuntimeController;
+    }
 
     public void onMenuOpen(boolean isOpen, int flag) {
         if (isOpen /*&& flag == 0*/) {
-            setX11FocusedChanged(false);
+            getLorieViewRuntime().requestX11Focus(false);
         } else {
-            setX11FocusedChanged(true);
-        }
-        if (mFloatBallMenuClient != null) {
-            if (isOpen && flag == 0) {
-                mFloatBallMenuClient.setTerminalShow(true);
-            } else if (isOpen && flag == 1) {
-                mFloatBallMenuClient.setShowPreference(true);
-            } else {
-                mFloatBallMenuClient.setShowPreference(false);
-                mFloatBallMenuClient.setTerminalShow(false);
-            }
+            getLorieViewRuntime().requestX11Focus(true);
         }
     }
 
 
-    public boolean sendTouchEvent(MotionEvent ev) {
-        if (inputControlsView.getProfile() != null) {
-            int[] view0Location = new int[2];
-            int[] viewLocation = new int[2];
+    @NonNull
+    @Override
+    public Activity getActivity() {
+        return this;
+    }
 
-            touchpadView.getLocationOnScreen(view0Location);
-            getLorieView().getLocationOnScreen(viewLocation);
+    @Override
+    public void openX11Preferences(boolean open) {
+        DrawerLayout drawer = getDrawer();
+        if (open)
+            drawer.openDrawer(GravityCompat.END);
+        else
+            drawer.closeDrawer(GravityCompat.END);
+    }
 
-            int offsetX = viewLocation[0] - view0Location[0];
-            int offsetY = viewLocation[1] - view0Location[1];
+    @Override
+    public void requestX11Focus(boolean focused) {
+        if (mLorieViewRuntimeController != null)
+            mLorieViewRuntimeController.requestX11Focus(focused);
+    }
 
-            getLorieView().screenInfo.offsetX = offsetX;
-            getLorieView().screenInfo.offsetY = offsetY;
-            if (extraKeyboardHandleTouchEvent(ev)) {
-                return true;
-            }
-//            ev.offsetLocation(0, -ScreenUtils.getStatusHeight());
-            inputControlsView.handleTouchEvent(ev);
-//            ev.offsetLocation(0, ScreenUtils.getStatusHeight());
-            return true;
-        }
-        if (ev.isFromSource(InputDevice.SOURCE_MOUSE)) {
-            return false;
-        }
-//                Log.d("sendTouchEvent",String.valueOf(inputControllerViewHandled));
-        if (null != mInputHandler) {
-            if (!inputControllerViewHandled && !extraKeyboardHandleTouchEvent(ev)) {
-                mInputHandler.handleTouchEvent(mMainContentView, getLorieView(), ev);
-            }
-        }
+    @Override
+    public void openSoftKeyboard() {
+        if (mLorieViewRuntimeController != null)
+            mLorieViewRuntimeController.openSoftKeyboard();
+    }
+
+    @Override
+    public void showProcessManager() {
+        if (mLorieViewRuntimeController != null)
+            mLorieViewRuntimeController.showProcessManager();
+    }
+
+    public void showProcessManagerDialog() {
+        if (mLorieViewRuntimeController != null)
+            mLorieViewRuntimeController.showProcessManagerDialog();
+    }
+
+    public void showInputControlsDialog() {
+        if (mLorieViewRuntimeController != null)
+            mLorieViewRuntimeController.showInputControlsDialog();
+    }
+
+    @Override
+    public void stopDesktop() {
+        stopXserver();
+    }
+
+    @NonNull
+    @Override
+    public com.termux.x11.Prefs getX11Prefs() {
+        return mLorieViewRuntimeController.getX11Prefs();
+    }
+
+    @Nullable
+    @Override
+    public LorieViewRuntimeApi.ActivityIntegration getX11ActivityIntegration() {
+        return mLorieViewRuntimeController != null ? mLorieViewRuntimeController.getX11ActivityIntegration() : null;
+    }
+
+    @Override
+    public void openPreference(boolean open) {
+        openX11Preferences(open);
+    }
+
+    @Override
+    public void installX11ServerBridge() {
+        if (mLorieViewRuntimeController != null)
+            mLorieViewRuntimeController.installX11ServerBridge();
+    }
+
+    @Override
+    public void onX11PreferenceChanged(String key) {
+        if (mLorieViewRuntimeController != null)
+            mLorieViewRuntimeController.applyX11PreferenceChange(key);
+    }
+
+    private void showX11PreferenceFragment(PreferenceFragmentCompat fragment) {
+        getSupportFragmentManager().beginTransaction()
+            .replace(R.id.id_window_preference, fragment)
+            .addToBackStack(null)
+            .commit();
+    }
+
+    @Override
+    public boolean onPreferenceStartFragment(@NonNull PreferenceFragmentCompat caller, @NonNull Preference pref) {
+        final LoriePreferences.LoriePreferenceFragment fragment = new LoriePreferences.LoriePreferenceFragment(pref.getFragment());
+        fragment.setTargetFragment(caller, 0);
+        showX11PreferenceFragment(fragment);
         return true;
     }
 
+    @Nullable
+    public MainSurfaceController getMainSurfaceController() {
+        return mMainSurfaceController;
+    }
 
-    public void onEdgeReached() {
-        getDrawer().openDrawer(GravityCompat.START);
+    public void setTerminalCopyMode(boolean copyMode) {
+        if (mMainSurfaceController != null)
+            mMainSurfaceController.setTerminalCopyMode(copyMode);
+        else
+            getDrawer().setDrawerLockMode(copyMode ? DrawerLayout.LOCK_MODE_LOCKED_CLOSED : DrawerLayout.LOCK_MODE_UNLOCKED, GravityCompat.START);
+    }
+
+    public void openStartDrawerExplicitly() {
+        if (mMainSurfaceController != null)
+            mMainSurfaceController.openStartDrawerExplicitly();
+        else
+            getDrawer().openDrawer(GravityCompat.START);
+    }
+
+    public void toggleStartDrawerExplicitly() {
+        if (mMainSurfaceController != null) {
+            mMainSurfaceController.toggleStartDrawerExplicitly();
+            return;
+        }
+
+        if (getDrawer().isDrawerOpen(GravityCompat.START))
+            getDrawer().closeDrawer(GravityCompat.START);
+        else
+            getDrawer().openDrawer(GravityCompat.START);
+    }
+
+    public void showTerminalSurface() {
+        if (mMainSurfaceController != null)
+            mMainSurfaceController.showTerminal();
+    }
+
+    public void showDisplaySurface() {
+        if (mMainSurfaceController != null)
+            mMainSurfaceController.showDisplay();
     }
 
     @SuppressLint("ResourceType")
@@ -308,17 +401,10 @@ public class TermuxActivity extends com.termux.x11.MainActivity implements Servi
 
         setActivityTheme();
         super.onCreate(savedInstanceState);
+        mLorieViewRuntimeController = new LorieViewRuntimeController(this);
         setContentView(R.layout.activity_termux_main);
-        mMainContentView = findViewById(R.id.id_termux_layout);
-        mMainContentView.setTermuxActivity(this);
 
-        ViewGroup vGroup = findViewById(R.id.id_termux_layout);
-
-        DisplayWindowLinearLayout viewContainer = (DisplayWindowLinearLayout) vGroup.getChildAt(0);
-        LinearLayout lorieLayout = (LinearLayout) viewContainer.getChildAt(1);
-        lorieLayout.addView(lorieContentView);
-        setPreferenceViewId(R.id.id_window_preference);
-        showFragment(new LoriePreferenceFragment(null));
+        showX11PreferenceFragment(new LoriePreferences.LoriePreferenceFragment(null));
 
 
         // Load termux shared preferences
@@ -359,6 +445,8 @@ public class TermuxActivity extends com.termux.x11.MainActivity implements Servi
 
         setToggleKeyboardView();
 
+        setSurfaceSwitchView();
+
         mMenuEntryClient = new MenuEntryClient(this, mTermuxTerminalSessionActivityClient);
 
         registerForContextMenu(mTerminalView);
@@ -393,25 +481,23 @@ public class TermuxActivity extends com.termux.x11.MainActivity implements Servi
         // Send the {@link TermuxConstants#BROADCAST_TERMUX_OPENED} broadcast to notify apps that Termux
         // app has been opened.
         TermuxUtils.sendTermuxOpenedBroadcast(this);
-        termuxActivityListener = new TermuxActivityListener() {
+        getLorieViewRuntime().setX11ActivityIntegration(new LorieViewRuntimeApi.ActivityIntegration() {
             @Override
             public void onX11PreferenceSwitchChange(boolean isOpen) {
-                mMainContentView.setX11PreferenceSwitchSlider(isOpen);
+                openX11Preferences(isOpen);
             }
 
             @Override
             public void releaseSlider(boolean open) {
-                if (!TermuxActivity.this.mEnableFloatBallMenu
+                if (!TermuxActivity.this.getLorieViewRuntime().isX11FloatBallMenuEnabled()
                     || TermuxActivity.this.mFloatBallMenuClient == null) {
-                    mMainContentView.releaseSlider(open);
+                    getDrawer().setDrawerLockMode(open ? DrawerLayout.LOCK_MODE_UNLOCKED : DrawerLayout.LOCK_MODE_LOCKED_CLOSED, GravityCompat.END);
                 }
             }
 
             @Override
             public void onChangeOrientation(int landscape) {
-                mMainContentView.changeLayoutOrientation(landscape);
-                hideInputControls();
-                inputControlsManager.loadProfiles(true);
+                getLorieViewRuntime().reloadInputControlsProfiles(true);
             }
 
             @Override
@@ -434,26 +520,25 @@ public class TermuxActivity extends com.termux.x11.MainActivity implements Servi
 
             @Override
             public void openSoftwareKeyboard() {
-                MainActivity.toggleKeyboardVisibility(TermuxActivity.this);
+                TermuxActivity.this.getLorieViewRuntime().openSoftKeyboard();
             }
 
             @Override
             public void showProcessManager() {
-                showProcessManagerDialog();
+                TermuxActivity.this.getLorieViewRuntime().showProcessManager();
             }
 
             @Override
             public void changePreference(String key) {
-                TermuxActivity.this.onPreferencesChanged(key);
+                TermuxActivity.this.getLorieViewRuntime().applyX11PreferenceChange(key);
             }
 
             @Override
             public List<ProcessInfo> collectProcessorInfo(String tag) {
-                //collect，parse,fill
                 List<ProcessInfo> processInfoList = new ArrayList<>();
                 runOnUiThread(() -> {
                     String path = String.format("%s/process_info", TERMUX_TMP_PREFIX_DIR_PATH);
-                    CommandUtils.execInPath(getInstance(), "collect_process_info",
+                    CommandUtils.execInPath(TermuxActivity.this, "collect_process_info",
                         new ArrayList<>(Arrays.asList(tag)), "/home/");
                     if (tag.equals("1")) {
                         return;
@@ -510,7 +595,7 @@ public class TermuxActivity extends com.termux.x11.MainActivity implements Servi
                             mFloatBallMenuClient.onDestroy();
                             mFloatBallMenuClient = null;
                             if (enableFloatBallMenu) {
-                                handler.postDelayed(() -> {
+                                LoriePreferences.handler.postDelayed(() -> {
                                     mFloatBallMenuClient = new FloatBallMenuClient(TermuxActivity.this);
                                     mFloatBallMenuClient.onCreate();
                                 }, 100);
@@ -530,13 +615,13 @@ public class TermuxActivity extends com.termux.x11.MainActivity implements Servi
             public void onExitApp() {
                 TermuxActivity.this.unlockOrExitApp();
             }
-        };
+        });
     }
 
     private void setFloatBallMenuClient() {
         SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(this);
-        mEnableFloatBallMenu = preferences.getBoolean("enableFloatBallMenu", false);
-        if (mEnableFloatBallMenu) {
+        getLorieViewRuntime().setX11FloatBallMenuEnabled(preferences.getBoolean("enableFloatBallMenu", false));
+        if (getLorieViewRuntime().isX11FloatBallMenuEnabled()) {
             mFloatBallMenuClient = new FloatBallMenuClient(this);
             mFloatBallMenuClient.onCreate();
         }
@@ -562,14 +647,14 @@ public class TermuxActivity extends com.termux.x11.MainActivity implements Servi
             addTermuxActivityRootViewGlobalLayoutListener();
 
         registerTermuxActivityBroadcastReceiver();
-        setSlideWindowLayout();
     }
 
     @Override
     public void onResume() {
         super.onResume();
-        inputControlsManager.loadProfiles(true);
-        mMainContentView.onResume();
+        if (mLorieViewRuntimeController != null)
+            mLorieViewRuntimeController.onResume();
+        getLorieViewRuntime().reloadInputControlsProfiles(false);
         Logger.logVerbose(LOG_TAG, "onResume");
 
         if (mIsInvalidState) return;
@@ -611,6 +696,8 @@ public class TermuxActivity extends com.termux.x11.MainActivity implements Servi
 
     @Override
     public void onDestroy() {
+        if (mLorieViewRuntimeController != null)
+            mLorieViewRuntimeController.destroy();
         super.onDestroy();
 
         Logger.logDebug(LOG_TAG, "onDestroy");
@@ -639,6 +726,34 @@ public class TermuxActivity extends com.termux.x11.MainActivity implements Servi
         if (mFloatBallMenuClient != null) {
             mFloatBallMenuClient.onAttachedToWindow();
         }
+    }
+
+    @Override
+    public void onConfigurationChanged(@NonNull Configuration newConfig) {
+        super.onConfigurationChanged(newConfig);
+        if (mLorieViewRuntimeController != null)
+            mLorieViewRuntimeController.onConfigurationChanged(newConfig);
+    }
+
+    @Override
+    public void onWindowFocusChanged(boolean hasFocus) {
+        super.onWindowFocusChanged(hasFocus);
+        if (mLorieViewRuntimeController != null)
+            mLorieViewRuntimeController.onWindowFocusChanged(hasFocus);
+    }
+
+    @Override
+    public void onUserLeaveHint() {
+        super.onUserLeaveHint();
+        if (mLorieViewRuntimeController != null)
+            mLorieViewRuntimeController.onUserLeaveHint();
+    }
+
+    @Override
+    public void onPictureInPictureModeChanged(boolean isInPictureInPictureMode, @NonNull Configuration newConfig) {
+        super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig);
+        if (mLorieViewRuntimeController != null)
+            mLorieViewRuntimeController.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig);
     }
 
     @Override
@@ -772,7 +887,7 @@ public class TermuxActivity extends com.termux.x11.MainActivity implements Servi
         } else {
             Toast.makeText(this, R.string.exit_toast_text, Toast.LENGTH_SHORT).show();
             isExit = true;
-            handler.postDelayed(() -> isExit = false, 2000);
+            LoriePreferences.handler.postDelayed(() -> isExit = false, 2000);
         }
     }
 
@@ -785,7 +900,7 @@ public class TermuxActivity extends com.termux.x11.MainActivity implements Servi
         } else {
             Toast.makeText(this, R.string.unlock_exit_toast_text, Toast.LENGTH_SHORT).show();
             isExit = true;
-            handler.postDelayed(() -> isExit = false, 2000);
+            LoriePreferences.handler.postDelayed(() -> isExit = false, 2000);
         }
     }
 
@@ -814,17 +929,10 @@ public class TermuxActivity extends com.termux.x11.MainActivity implements Servi
                     command = "termux-setup-storage;sleep 5s;tar -zcf /sdcard/termux-backup.tar.gz -C /data/data/com.termux/files ./home ./usr \n";
                 }
                 mTermuxTerminalSessionActivityClient.getCurrentStoredSessionOrLast().write(command);
-                mMainContentView.setTerminalViewSwitchSlider(true);
+                showTerminalSurface();
                 closeTerminalSessionListView();
             }
         });
-    }
-
-    private void setSlideWindowLayout() {
-        Configuration configuration = getResources().getConfiguration();
-        boolean landscape = !(configuration.orientation == SCREEN_ORIENTATION_PORTRAIT);
-        DisplaySlidingWindow.setLandscape(landscape);
-//        Log.d("setSlideWindowLayout", "configuration:" + landscape);
     }
 
     private void closeTerminalSessionListView() {
@@ -838,6 +946,18 @@ public class TermuxActivity extends com.termux.x11.MainActivity implements Servi
 
         // Set termux terminal view
         mTerminalView = findViewById(R.id.terminal_view);
+        mMainSurfaceController = new MainSurfaceController(
+            getDrawer(),
+            findViewById(R.id.main_surface_container),
+            mTerminalView);
+        TermuxScreenView termuxScreenView = new TermuxScreenView(this);
+        termuxScreenView.setStartDrawerGestureListener(this::openStartDrawerExplicitly);
+        mMainSurfaceController.attachDisplayView(termuxScreenView);
+        getLorieViewRuntime().attachTermuxScreenView(termuxScreenView);
+        getLorieViewRuntime().setX11ConnectionStateListener(connected -> {
+            if (connected)
+                showDisplaySurface();
+        });
         mTerminalView.setTerminalViewClient(mTermuxTerminalViewClient);
 
         if (mTermuxTerminalViewClient != null)
@@ -940,6 +1060,18 @@ public class TermuxActivity extends com.termux.x11.MainActivity implements Servi
         });
     }
 
+    private void setSurfaceSwitchView() {
+        findViewById(R.id.show_terminal_button).setOnClickListener(v -> {
+            showTerminalSurface();
+            getDrawer().closeDrawers();
+        });
+
+        findViewById(R.id.show_display_button).setOnClickListener(v -> {
+            showDisplaySurface();
+            getDrawer().closeDrawers();
+        });
+    }
+
     @SuppressLint({"RtlHardcoded", "MissingSuperCall"})
     @Override
     public void onBackPressed() {
@@ -947,13 +1079,9 @@ public class TermuxActivity extends com.termux.x11.MainActivity implements Servi
             getDrawer().closeDrawers();
         } else {
 //            finishActivityIfNotFinishing();
-            if (!mEnableFloatBallMenu || mFloatBallMenuClient == null) {
-                mMainContentView.releaseSlider(true);
-                if (!getX11Focus()) {
-                    if (!back2PreviousMenu()) {
-                        termuxActivityListener.onX11PreferenceSwitchChange(false);
-                    }
-                }
+            if (!getLorieViewRuntime().isX11FloatBallMenuEnabled() || mFloatBallMenuClient == null) {
+                getLorieViewRuntime().releaseX11SidePanel(true);
+                getLorieViewRuntime().handleX11BackNavigation();
             }
         }
     }
@@ -1156,6 +1284,8 @@ public class TermuxActivity extends com.termux.x11.MainActivity implements Servi
     protected void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
         Logger.logVerbose(LOG_TAG, "onActivityResult: requestCode: " + requestCode + ", resultCode: " + resultCode + ", data: " + IntentUtils.getIntentString(data));
+        if (mLorieViewRuntimeController != null && mLorieViewRuntimeController.onActivityResult(requestCode, resultCode, data))
+            return;
         if (requestCode == PermissionUtils.REQUEST_GRANT_STORAGE_PERMISSION) {
             requestStoragePermission(true);
         }
@@ -1203,7 +1333,7 @@ public class TermuxActivity extends com.termux.x11.MainActivity implements Servi
                     mTermuxTerminalSessionActivityClient.getCurrentStoredSessionOrLast().write(command);
                 }
             });
-            mMainContentView.setTerminalViewSwitchSlider(true);
+            showTerminalSurface();
         }
     }
 
@@ -1414,21 +1544,18 @@ public class TermuxActivity extends com.termux.x11.MainActivity implements Servi
         return intent;
     }
 
-    public DisplaySlidingWindow getMainContentView() {
-        return mMainContentView;
-    }
     private void stopXserver(){
         final AlertDialog.Builder b = new AlertDialog.Builder(this );
         b.setIcon(android.R.drawable.ic_dialog_alert);
         b.setMessage(R.string.stop_desktop_title);
         b.setPositiveButton(android.R.string.yes, (dialog, id) -> {
             dialog.dismiss();
-            openPreference(false);
-            handler.postDelayed(() -> {
-                mLorieViewConnected = false;
+            openX11Preferences(false);
+            LoriePreferences.handler.postDelayed(() -> {
+                getLorieViewRuntime().setX11DisplayConnected(false);
                 CommandUtils.exec(this, "stopserver", null);
             }, 500);
-            mLorieViewConnected=false;
+            getLorieViewRuntime().setX11DisplayConnected(false);
         });
         b.setNegativeButton(android.R.string.no, null);
         b.show();

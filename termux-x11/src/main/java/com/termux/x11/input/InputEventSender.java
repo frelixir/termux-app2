@@ -15,8 +15,6 @@ import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.View;
 
-import com.termux.x11.MainActivity;
-
 import java.util.List;
 import java.util.TreeSet;
 
@@ -44,6 +42,7 @@ public final class InputEventSender {
     /** Set of pressed keys for which we've sent TextEvent. */
     private final TreeSet<Integer> mPressedTextKeys;
     private final TreeSet<Integer> mPressedKeys;
+    private Runnable mReleaseCaptureCallback;
 
     public InputEventSender(InputStub injector) {
         if (injector == null)
@@ -51,6 +50,10 @@ public final class InputEventSender {
         mInjector = injector;
         mPressedTextKeys = new TreeSet<>();
         mPressedKeys = new TreeSet<>();
+    }
+
+    public void setReleaseCaptureCallback(Runnable releaseCaptureCallback) {
+        mReleaseCaptureCallback = releaseCaptureCallback;
     }
 
     private static final List<Integer> buttons = List.of(BUTTON_UNDEFINED, BUTTON_LEFT, BUTTON_MIDDLE, BUTTON_RIGHT);
@@ -229,8 +232,8 @@ public final class InputEventSender {
         else
             mPressedKeys.remove(keyCode);
 
-        if (keyCode == KEYCODE_ESCAPE && !pressed && e.hasNoModifiers())
-            MainActivity.setCapturingEnabled(false);
+        if (keyCode == KEYCODE_ESCAPE && !pressed && e.hasNoModifiers() && mReleaseCaptureCallback != null)
+            mReleaseCaptureCallback.run();
 
         // We try to send all other key codes to the host directly.
         return mInjector.sendKeyEvent(scancode, keyCode, pressed);

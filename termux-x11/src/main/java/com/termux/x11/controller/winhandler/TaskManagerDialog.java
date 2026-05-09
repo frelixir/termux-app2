@@ -1,6 +1,7 @@
 package com.termux.x11.controller.winhandler;
 
 import android.app.ActivityManager;
+import android.app.Activity;
 import android.content.Context;
 import android.os.Build;
 import android.util.TypedValue;
@@ -12,7 +13,7 @@ import android.widget.LinearLayout;
 import android.widget.PopupMenu;
 import android.widget.TextView;
 
-import com.termux.x11.MainActivity;
+import com.termux.x11.LorieViewRuntimeApi;
 import com.termux.x11.R;
 import com.termux.x11.controller.contentdialog.ContentDialog;
 import com.termux.x11.controller.core.CPUStatus;
@@ -25,14 +26,16 @@ import java.util.Timer;
 import java.util.TimerTask;
 
 public class TaskManagerDialog extends ContentDialog implements OnGetProcessInfoListener {
-    private final MainActivity activity;
+    private final LorieViewRuntimeApi.WinHandlerHost host;
+    private final Activity activity;
     private final LayoutInflater inflater;
     private Timer timer;
     private final Object lock = new Object();
 
-    public TaskManagerDialog(MainActivity activity) {
-        super(activity, R.layout.task_manager_dialog);
-        this.activity = activity;
+    public TaskManagerDialog(LorieViewRuntimeApi.WinHandlerHost host) {
+        super(host.getActivity(), R.layout.task_manager_dialog);
+        this.host = host;
+        this.activity = host.getActivity();
         setCancelable(false);
         setTitle(R.string.task_manager);
         setIcon(R.drawable.icon_task_manager);
@@ -41,7 +44,7 @@ public class TaskManagerDialog extends ContentDialog implements OnGetProcessInfo
         cancelButton.setText(R.string.new_task);
         cancelButton.setOnClickListener((v) -> {
             dismiss();
-            ContentDialog.prompt(activity, R.string.new_task, "taskmgr.exe", (command) -> activity.getWinHandler().exec(command));
+            ContentDialog.prompt(activity, R.string.new_task, "taskmgr.exe", (command) -> host.getWinHandler().exec(command));
         });
 
         setOnDismissListener((dialog) -> {
@@ -49,17 +52,17 @@ public class TaskManagerDialog extends ContentDialog implements OnGetProcessInfo
                 timer.cancel();
                 timer = null;
             }
-            activity.getTermuxProcessorInfo("1");
+            host.getTermuxProcessorInfo("1");
             final LinearLayout container = findViewById(R.id.LLProcessList);
             container.removeAllViews();
-            activity.getWinHandler().setOnGetProcessInfoListener(null);
+            host.getWinHandler().setOnGetProcessInfoListener(null);
         });
         inflater = LayoutInflater.from(activity);
     }
 
     private void update() {
         synchronized (lock) {
-            activity.getWinHandler().listProcesses();
+            host.getWinHandler().listProcesses();
 
             final LinearLayout container = findViewById(R.id.LLProcessList);
             if (container.getChildCount() == 0) {
@@ -76,7 +79,7 @@ public class TaskManagerDialog extends ContentDialog implements OnGetProcessInfo
     }
 
     private void listAndroidProcess() {
-        List<ProcessInfo> processInfoList = activity.getTermuxProcessorInfo("0");
+        List<ProcessInfo> processInfoList = host.getTermuxProcessorInfo("0");
         if (processInfoList == null) {
             return;
         }
@@ -102,7 +105,7 @@ public class TaskManagerDialog extends ContentDialog implements OnGetProcessInfo
         listItemMenu.inflate(R.menu.process_popup_menu);
         listItemMenu.setOnMenuItemClickListener((menuItem) -> {
             int itemId = menuItem.getItemId();
-            final WinHandler winHandler = activity.getWinHandler();
+            final WinHandler winHandler = host.getWinHandler();
             if (itemId == R.id.process_affinity) {
                 showProcessorAffinityDialog(processInfo);
             } else if (itemId == R.id.bring_to_front) {
@@ -125,7 +128,7 @@ public class TaskManagerDialog extends ContentDialog implements OnGetProcessInfo
         final CPUListView cpuListView = dialog.findViewById(R.id.CPUListView);
         cpuListView.setCheckedCPUList(processInfo.getCPUList());
         dialog.setOnConfirmCallback(() -> {
-            WinHandler winHandler = activity.getWinHandler();
+            WinHandler winHandler = host.getWinHandler();
             winHandler.setProcessAffinity(processInfo.pid, ProcessHelper.getAffinityMask(cpuListView.getCheckedCPUList()));
             update();
         });
@@ -135,7 +138,7 @@ public class TaskManagerDialog extends ContentDialog implements OnGetProcessInfo
     @Override
     public void show() {
         update();
-        activity.getWinHandler().setOnGetProcessInfoListener(this);
+        host.getWinHandler().setOnGetProcessInfoListener(this);
 
         timer = new Timer();
         timer.schedule(new TimerTask() {

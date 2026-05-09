@@ -1,7 +1,8 @@
 package com.termux.x11.utils;
 
+import com.termux.x11.LorieViewRuntimeApi;
+
 import static android.view.WindowManager.LayoutParams.FLAG_FULLSCREEN;
-import com.termux.x11.MainActivity;
 import android.app.Activity;
 import android.graphics.Rect;
 import android.view.View;
@@ -36,7 +37,9 @@ public class FullscreenWorkaround {
     }
 
     private void possiblyResizeChildOfContent() {
-        Prefs p = MainActivity.getPrefs();
+        Prefs p = mActivity instanceof LorieViewRuntimeApi.LorieHost
+            ? ((LorieViewRuntimeApi.LorieHost) mActivity).getX11Prefs()
+            : new Prefs(mActivity);
         if (
             !mActivity.hasWindowFocus() ||
                 !((mActivity.getWindow().getAttributes().flags & FLAG_FULLSCREEN) == FLAG_FULLSCREEN) ||

@@ -63,8 +63,6 @@ import androidx.preference.PreferenceScreen;
 import androidx.preference.SeekBarPreference;
 
 import com.termux.x11.controller.InputControllerActivity;
-import com.termux.x11.controller.container.Container;
-import com.termux.x11.controller.container.Shortcut;
 import com.termux.x11.controller.contentdialog.ContentDialog;
 import com.termux.x11.controller.core.Callback;
 import com.termux.x11.controller.core.DownloadProgressDialog;
@@ -72,8 +70,6 @@ import com.termux.x11.controller.inputcontrols.ControlsProfile;
 import com.termux.x11.controller.inputcontrols.InputControlsManager;
 import com.termux.x11.controller.widget.InputControlsView;
 import com.termux.x11.controller.widget.TouchpadView;
-import com.termux.x11.controller.winhandler.ProcessInfo;
-import com.termux.x11.controller.winhandler.WinHandler;
 import com.termux.x11.utils.KeyInterceptor;
 import com.termux.x11.utils.SamsungDexUtils;
 import com.termux.x11.utils.TermuxX11ExtraKeys;
@@ -90,202 +86,17 @@ import java.util.function.Consumer;
 import java.util.regex.PatternSyntaxException;
 
 @SuppressWarnings("deprecation")
-public class LoriePreferences extends AppCompatActivity implements PreferenceFragmentCompat.OnPreferenceStartFragmentCallback {
+public final class LoriePreferences {
     static final String ACTION_PREFERENCES_CHANGED = "com.termux.x11.ACTION_PREFERENCES_CHANGED";
     public static Prefs prefs = null;
 
-    public static int OPEN_FILE_REQUEST_CODE = 102;
+    public static final int OPEN_FILE_REQUEST_CODE = 102;
     static final String SHOW_IME_WITH_HARD_KEYBOARD = "show_ime_with_hard_keyboard";
-    protected LorieView xServer;
-    protected int orientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT;
 
-    //input controller
-    protected InputControlsManager inputControlsManager;
-    protected InputControlsView inputControlsView;
-    protected TouchpadView touchpadView;
-    protected Runnable editInputControlsCallback;
-    protected Shortcut shortcut;
-    protected DownloadProgressDialog preloaderDialog;
-    protected Callback<Uri> openFileCallback;
-    protected float globalCursorSpeed = 1.0f;
-    protected ControlsProfile profile;
-    protected String controlsProfile;
-    protected Container container;
-    public static boolean mLorieViewConnected = false;
-
-    public List<ProcessInfo> getTermuxProcessorInfo(String tag) {
-        if (termuxActivityListener != null) {
-            return termuxActivityListener.collectProcessorInfo(tag);
-        }
-        return null;
-    }
-
-    protected interface TermuxActivityListener {
-        void onX11PreferenceSwitchChange(boolean isOpen);
-
-        void releaseSlider(boolean open);
-
-        void onChangeOrientation(int landscape);
-
-        void reInstallX11StartScript(Activity activity);
-
-        void stopDesktop();
-
-        void openSoftwareKeyboard();
-
-        void showProcessManager();
-
-        void changePreference(String key);
-
-        List<ProcessInfo> collectProcessorInfo(String tag);
-
-        void setFloatBallMenu(boolean enableFloatBallMenu, boolean enableGlobalFloatBallMenu);
-
-        void onExitApp();
-    }
-
-    public TermuxActivityListener getTermuxActivityListener() {
-        return termuxActivityListener;
-    }
-
-    protected TermuxActivityListener termuxActivityListener;
-
-    private int id_preference_view;
-
-    public void setPreferenceViewId(int viewId) {
-        id_preference_view = viewId;
-    }
-
-
-    private final BroadcastReceiver receiver = new BroadcastReceiver() {
-        @SuppressLint("UnspecifiedRegisterReceiverFlag")
-        @Override
-        public void onReceive(Context context, Intent intent) {
-            if (ACTION_PREFERENCES_CHANGED.equals(intent.getAction()) &&
-                intent.getBooleanExtra("fromBroadcast", false))
-                updatePreferencesLayout();
-        }
-    };
-
-    private final ContentObserver accessibilityObserver = new ContentObserver(null) {
-        private final Runnable updateLayout = () -> updatePreferencesLayout();
-
-        @Override
-        public void onChange(boolean selfChange) {
-            handler.removeCallbacks(updateLayout);
-            handler.postDelayed(updateLayout, 200);
-        }
-
-        @Override
-        public boolean deliverSelfNotifications() {
-            return true;
-        }
-    };
-
-//    @Override
-//    public void onWindowFocusChanged(boolean hasFocus) {
-//        super.onWindowFocusChanged(hasFocus);
-//        if (hasFocus)
-//            updatePreferencesLayout();
-//    }
-
-    protected void updatePreferencesLayout() {
-        getSupportFragmentManager().getFragments().forEach(fragment -> {
-            if (fragment instanceof LoriePreferenceFragment)
-                ((LoriePreferenceFragment) fragment).updatePreferencesLayout();
-        });
-    }
-
-    @Override
-    protected void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
-        prefs = new Prefs(this);
-
-        ActionBar actionBar = getSupportActionBar();
-        if (actionBar != null) {
-            actionBar.setDisplayHomeAsUpEnabled(true);
-            actionBar.setHomeButtonEnabled(true);
-        }
-
-        Uri ENABLED_ACCESSIBILITY_SERVICES = Settings.Secure.getUriFor(Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES);
-        Uri ACCESSIBILITY_ENABLED = Settings.Secure.getUriFor(Settings.Secure.ACCESSIBILITY_ENABLED);
-
-        getContentResolver().registerContentObserver(ENABLED_ACCESSIBILITY_SERVICES, true, accessibilityObserver);
-        getContentResolver().registerContentObserver(ACCESSIBILITY_ENABLED, true, accessibilityObserver);
-        if (LoriePreferenceFragment.loriePreferences == null) {
-            LoriePreferenceFragment.loriePreferences = this;
-        }
-    }
-
-    @SuppressLint("WrongConstant")
-    @Override
-    protected void onResume() {
-        super.onResume();
-        IntentFilter filter = new IntentFilter(ACTION_PREFERENCES_CHANGED);
-        registerReceiver(receiver, filter, SDK_INT >= Build.VERSION_CODES.TIRAMISU ? RECEIVER_NOT_EXPORTED : 0);
-    }
-
-    @Override
-    protected void onPause() {
-        super.onPause();
-        unregisterReceiver(receiver);
-    }
-
-    @Override
-    public boolean onOptionsItemSelected(MenuItem item) {
-        int id = item.getItemId();
-
-        if (id == android.R.id.home) {
-            if (getSupportFragmentManager().getBackStackEntryCount() == 0)
-                finish();
-            else
-                onBackPressed();
-
-            return true;
-        }
-
-        return super.onOptionsItemSelected(item);
-    }
-
-    protected void showFragment(PreferenceFragmentCompat fragment) {
-        getSupportFragmentManager().beginTransaction()
-//            .setCustomAnimations(R.anim.slide_in_right, R.anim.slide_out_left, R.anim.slide_in_left, R.anim.slide_out_right)
-            .replace(id_preference_view, fragment)
-            .addToBackStack(null)
-            .commit();
-    }
-
-    @Override
-    public boolean onPreferenceStartFragment(@NonNull PreferenceFragmentCompat caller, @NonNull Preference pref) {
-        final LoriePreferenceFragment fragment = new LoriePreferenceFragment(pref.getFragment());
-        fragment.setTargetFragment(caller, 0);
-        showFragment(fragment);
-        return true;
-    }
-
-    public boolean back2PreviousMenu() {
-        boolean isSubMenu = getSupportFragmentManager().getBackStackEntryCount() > 1;
-        if (isSubMenu) {
-            getOnBackPressedDispatcher().onBackPressed();
-        }
-        return isSubMenu;
-    }
-
-    public void installX11ServerBridge() {
-        if (termuxActivityListener != null) {
-            termuxActivityListener.reInstallX11StartScript(this);
-        }
-    }
-
-    public void stopDesktop() {
-        if (termuxActivityListener != null) {
-            termuxActivityListener.stopDesktop();
-        }
+    private LoriePreferences() {
     }
 
     public static class LoriePreferenceFragment extends PreferenceFragmentCompat implements OnPreferenceChangeListener {
-        private static LoriePreferences loriePreferences;
-
         private final Runnable updateLayout = this::updatePreferencesLayout;
         private static final Method onSetInitialValue;
 
@@ -323,11 +134,18 @@ public class LoriePreferences extends AppCompatActivity implements PreferenceFra
         @Override
         public void onResume() {
             super.onResume();
-            //noinspection DataFlowIssue
-            ActionBar actionBar = ((LoriePreferences) getActivity()).getSupportActionBar();
-            if (actionBar != null) {
-                actionBar.setTitle(getPreferenceScreen().getTitle());
+            if (getActivity() instanceof AppCompatActivity) {
+                ActionBar actionBar = ((AppCompatActivity) getActivity()).getSupportActionBar();
+                if (actionBar != null) {
+                    actionBar.setTitle(getPreferenceScreen().getTitle());
+                }
             }
+        }
+
+        private LorieViewRuntimeApi.Host getPreferenceHost() {
+            if (requireActivity() instanceof LorieViewRuntimeApi.Host)
+                return (LorieViewRuntimeApi.Host) requireActivity();
+            throw new IllegalStateException("LoriePreferenceFragment requires an LorieViewRuntimeApi.Host");
         }
 
         /**
@@ -538,17 +356,20 @@ public class LoriePreferences extends AppCompatActivity implements PreferenceFra
             }
             if (p.getKey().contentEquals("open_keyboard")) {
                 handler.postDelayed(() -> {
-                    if (loriePreferences != null) {
-                        loriePreferences.openPreference(false);
-                        loriePreferences.termuxActivityListener.openSoftwareKeyboard();
-                    }
+                    LorieViewRuntimeApi.Host host = getPreferenceHost();
+                    host.openPreference(false);
+                    LorieViewRuntimeApi.ActivityIntegration integration = host.getX11ActivityIntegration();
+                    if (integration != null)
+                        integration.openSoftwareKeyboard();
                 }, 500);
             }
             if (p.getKey().contentEquals("select_controller")) {
-                loriePreferences.showInputControlsDialog();
+                getPreferenceHost().showInputControlsDialog();
             }
             if (p.getKey().contentEquals("open_progress_manager")) {
-                loriePreferences.termuxActivityListener.showProcessManager();
+                LorieViewRuntimeApi.ActivityIntegration integration = getPreferenceHost().getX11ActivityIntegration();
+                if (integration != null)
+                    integration.showProcessManager();
             }
             if (p.getKey().contentEquals("install_x11_server_bridge")) {
                 View view = getLayoutInflater().inflate(R.layout.x11_server_bridge_config, null, false);
@@ -561,9 +382,7 @@ public class LoriePreferences extends AppCompatActivity implements PreferenceFra
                     .setTitle("X11 server bridge installer")
                     .setPositiveButton("OK",
                         (dialog, whichButton) -> {
-                            if (loriePreferences != null) {
-                                loriePreferences.installX11ServerBridge();
-                            }
+                            getPreferenceHost().installX11ServerBridge();
                         }
                     )
                     .setNegativeButton("Cancel", (dialog, whichButton) -> dialog.dismiss())
@@ -571,7 +390,7 @@ public class LoriePreferences extends AppCompatActivity implements PreferenceFra
                     .show();
             }
             if (p.getKey().contentEquals("stop_desktop")) {
-                loriePreferences.stopDesktop();
+                getPreferenceHost().stopDesktop();
             }
 
 
@@ -643,7 +462,7 @@ public class LoriePreferences extends AppCompatActivity implements PreferenceFra
             if ("enableGlobalFloatBallMenu".contentEquals(key)) {
                 prefs.enableGlobalFloatBallMenu.put((Boolean) newValue);
             }
-            loriePreferences.termuxActivityListener.changePreference(key);
+            getPreferenceHost().onX11PreferenceChanged(key);
             return true;
         }
 
@@ -699,7 +518,7 @@ public class LoriePreferences extends AppCompatActivity implements PreferenceFra
 
             try {
                 if (intent != null && intent.getExtras() != null) {
-                    Prefs p = (MainActivity.getInstance() != null) ? new Prefs(MainActivity.getInstance()) : (prefs != null ? prefs : new Prefs(context));
+                    Prefs p = prefs != null ? prefs : new Prefs(context);
                     if (intent.getStringExtra("list") != null) {
                         String result = "";
                         for (PrefsProto.Preference pref : p.keys.values()) {
@@ -899,10 +718,6 @@ public class LoriePreferences extends AppCompatActivity implements PreferenceFra
 
     public static Handler handler = Looper.getMainLooper() != null ? new Handler(Looper.getMainLooper()) : null;
 
-    public void onClick(View view) {
-        showFragment(new LoriePreferenceFragment("ekbar"));
-    }
-
     /**
      * @noinspection unused
      */
@@ -1049,7 +864,7 @@ public class LoriePreferences extends AppCompatActivity implements PreferenceFra
 
         protected void recheckStoringSecondaryDisplayPreferences() {
             storeSecondaryDisplayPreferencesSeparately = builtInDisplayPreferences.getBoolean("storeSecondaryDisplayPreferencesSeparately", false);
-            boolean isExternalDisplay = ((WindowManager) ctx.getSystemService(WINDOW_SERVICE)).getDefaultDisplay().getDisplayId() != Display.DEFAULT_DISPLAY;
+            boolean isExternalDisplay = ((WindowManager) ctx.getSystemService(Context.WINDOW_SERVICE)).getDefaultDisplay().getDisplayId() != Display.DEFAULT_DISPLAY;
             preferences = (storeSecondaryDisplayPreferencesSeparately && isExternalDisplay) ? secondaryDisplayPreferences : builtInDisplayPreferences;
         }
 
@@ -1130,143 +945,4 @@ public class LoriePreferences extends AppCompatActivity implements PreferenceFra
         }
     }
 
-    private void callProgressManager() {
-        if (termuxActivityListener != null) {
-            termuxActivityListener.showProcessManager();
-        }
-    }
-
-    //inout control
-    public InputControlsView getInputControlsView() {
-        return inputControlsView;
-    }
-
-    protected WinHandler winHandler;
-
-    public WinHandler getWinHandler() {
-        return winHandler;
-    }
-
-    public void setOpenFileCallback(Callback<Uri> openFileCallback) {
-        this.openFileCallback = openFileCallback;
-    }
-
-    public String getControlsProfile() {
-        return controlsProfile;
-    }
-
-    public Shortcut getShortcut() {
-        return shortcut;
-    }
-
-    public DownloadProgressDialog getPreloaderDialog() {
-        return preloaderDialog;
-    }
-
-    public void showInputControlsDialog() {
-        final ContentDialog dialog = new ContentDialog(MainActivity.getInstance(), R.layout.input_controls_dialog);
-        dialog.setTitle(R.string.input_controls);
-        dialog.setIcon(R.drawable.icon_input_controls);
-
-        final Spinner sProfile = dialog.findViewById(R.id.SProfile);
-        Runnable loadProfileSpinner = () -> {
-            ArrayList<ControlsProfile> profiles = inputControlsManager.getProfiles();
-            ArrayList<String> profileItems = new ArrayList<>();
-            int selectedPosition = 0;
-            profileItems.add("-- " + getString(R.string.disabled) + " --");
-            for (int i = 0; i < profiles.size(); i++) {
-                ControlsProfile profile = profiles.get(i);
-                if (profile == inputControlsView.getProfile()) selectedPosition = i + 1;
-                profileItems.add(profile.getName());
-            }
-
-            sProfile.setAdapter(new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item, profileItems));
-            sProfile.setSelection(selectedPosition);
-        };
-        loadProfileSpinner.run();
-
-        final CheckBox cbLockCursor = dialog.findViewById(R.id.CBLockCursor);
-        cbLockCursor.setChecked(xServer.cursorLocker.isEnabled());
-
-        final CheckBox cbEnableTouchScreen = dialog.findViewById(R.id.CBTouchScreen);
-
-        final CheckBox cbShowTouchscreenControls = dialog.findViewById(R.id.CBShowTouchscreenControls);
-        cbShowTouchscreenControls.setChecked(inputControlsView.isShowTouchscreenControls());
-
-        dialog.findViewById(R.id.BTSettings).setOnClickListener((v) -> {
-            int position = sProfile.getSelectedItemPosition();
-            Intent intent = new Intent(this, InputControllerActivity.class);
-            intent.putExtra("edit_input_controls", true);
-            intent.putExtra("selected_profile_id", position > 0 ? inputControlsManager.getProfiles().get(position - 1).id : 0);
-            editInputControlsCallback = () -> {
-                hideInputControls();
-                inputControlsManager.loadProfiles(true);
-                loadProfileSpinner.run();
-            };
-            startActivityForResult(intent, InputControllerActivity.EDIT_INPUT_CONTROLS_REQUEST_CODE);
-        });
-
-        dialog.setOnConfirmCallback(() -> {
-            if (termuxActivityListener == null) {
-                return;
-            }
-            xServer.cursorLocker.setEnabled(cbLockCursor.isChecked() ? true : false);
-            inputControlsView.setShowTouchscreenControls(cbShowTouchscreenControls.isChecked());
-            int position = sProfile.getSelectedItemPosition();
-            if (position > 0) {
-                if (cbEnableTouchScreen.isChecked()) {
-                    touchpadView.setTouchMode(TouchpadView.TouchMode.TOUCH_SCREEN);
-                } else {
-                    touchpadView.setTouchMode(TouchpadView.TouchMode.TRACK_PAD);
-                }
-                showInputControls(inputControlsManager.getProfiles().get(position - 1));
-            } else {
-                hideInputControls();
-            }
-        });
-
-        dialog.show();
-    }
-
-    protected void showInputControls(ControlsProfile controlsProfile) {
-        inputControlsView.setVisibility(View.VISIBLE);
-        inputControlsView.requestFocus();
-        inputControlsView.setProfile(controlsProfile);
-
-        if (profile != null) {
-            touchpadView.setSensitivity(profile.getCursorSpeed() * globalCursorSpeed);
-        }
-        touchpadView.setVisibility(View.VISIBLE);
-
-        inputControlsView.invalidate();
-        if (termuxActivityListener != null) {
-            termuxActivityListener.onX11PreferenceSwitchChange(false);
-        }
-    }
-
-    public void hideInputControls() {
-        inputControlsView.setShowTouchscreenControls(true);
-        inputControlsView.setVisibility(View.GONE);
-        inputControlsView.setProfile(null);
-
-        touchpadView.setVisibility(View.GONE);
-
-        inputControlsView.invalidate();
-    }
-
-    public void prepareToExit() {
-        if (termuxActivityListener != null) {
-            termuxActivityListener.onExitApp();
-        }
-    }
-
-    public void openPreference(boolean open) {
-        if (termuxActivityListener != null)
-            termuxActivityListener.onX11PreferenceSwitchChange(open);
-    }
-
-    public void releaseSlider(boolean release) {
-        if (termuxActivityListener != null)
-            termuxActivityListener.releaseSlider(release);
-    }
 }

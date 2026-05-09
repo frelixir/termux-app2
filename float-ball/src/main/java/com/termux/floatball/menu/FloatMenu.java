@@ -94,10 +94,7 @@ public class FloatMenu extends FrameLayout {
     public void attachToWindow(WindowManager windowManager) {
         if (!isAdded) {
             mBallSize = floatBallManager.getBallSize();
-            mLayoutParams.x = floatBallManager.floatBallX;
-            mLayoutParams.y = floatBallManager.floatBallY - mSize / 2;
-            mPosition = computeMenuLayout(mLayoutParams);
-            refreshPathMenu(mPosition);
+            prepareMenuWindowLayout();
             toggle(mDuration);
             windowManager.addView(this, mLayoutParams);
             isAdded = true;
@@ -202,6 +199,34 @@ public class FloatMenu extends FrameLayout {
 
     public void removeAllItemViews() {
         mMenuLayout.removeAllViews();
+    }
+
+    private void prepareMenuWindowLayout() {
+        int lastPosition = 0;
+        int lastSize = -1;
+        for (int i = 0; i < 3; i++) {
+            mPosition = computeMenuLayout(mLayoutParams);
+            refreshPathMenu(mPosition);
+            updateMenuSizeForCurrentArc();
+            if (mPosition == lastPosition && mSize == lastSize)
+                break;
+            lastPosition = mPosition;
+            lastSize = mSize;
+        }
+    }
+
+    private void updateMenuSizeForCurrentArc() {
+        int size = Math.max(mConfig.mSize, mMenuLayout.getLayoutSize());
+        if (mSize != size) {
+            mSize = size;
+            mLayoutParams.width = size;
+            mLayoutParams.height = size;
+
+            ViewGroup.LayoutParams layoutParams = mMenuLayout.getLayoutParams();
+            layoutParams.width = size;
+            layoutParams.height = size;
+            mMenuLayout.setLayoutParams(layoutParams);
+        }
     }
 
     /**

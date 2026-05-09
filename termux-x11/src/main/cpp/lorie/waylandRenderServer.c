@@ -37,7 +37,7 @@ static volatile int connection_alive = 1;
 extern struct {
     jclass self;
     jmethodID getInstance, clientConnectedStateChanged, resetIme, onRenderConnectionChanged;
-} MainActivity;
+} LorieViewRuntimeRegistry;
 
 extern JNIEnv *guienv;
 extern jobject globalThiz;
@@ -92,11 +92,11 @@ static void cleanupSharedResources(void) {
     }
 
     jobject instance = (*guienv)->CallStaticObjectMethod(guienv,
-                                                      MainActivity.self,
-                                                      MainActivity.getInstance);
+                                                      LorieViewRuntimeRegistry.self,
+                                                      LorieViewRuntimeRegistry.getInstance);
     if (instance)
         (*guienv)->CallVoidMethod(guienv, instance,
-                               MainActivity.onRenderConnectionChanged);
+                               LorieViewRuntimeRegistry.onRenderConnectionChanged);
 }
 
 static int process(int fd) {
@@ -212,11 +212,11 @@ static int process(int fd) {
                         case EVENT_CLIENT_VERIFY_SUCCEED: {
                             JNIEnv *env = guienv;
                             jobject instance = (*env)->CallStaticObjectMethod(env,
-                                                                              MainActivity.self,
-                                                                              MainActivity.getInstance);
+                                                                              LorieViewRuntimeRegistry.self,
+                                                                              LorieViewRuntimeRegistry.getInstance);
                             if (instance)
                                 (*env)->CallVoidMethod(env, instance,
-                                                       MainActivity.onRenderConnectionChanged);
+                                                       LorieViewRuntimeRegistry.onRenderConnectionChanged);
                             break;
                         }
                         case EVENT_STOP_RENDER: {

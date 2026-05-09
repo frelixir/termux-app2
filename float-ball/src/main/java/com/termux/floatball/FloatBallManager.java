@@ -4,6 +4,7 @@ import android.app.Activity;
 import android.content.Context;
 import android.content.res.Configuration;
 import android.graphics.Point;
+import android.graphics.drawable.Drawable;
 import android.view.View;
 import android.view.WindowManager;
 
@@ -95,6 +96,10 @@ public class FloatBallManager {
 
     public int getBallSize() {
         return floatBall.getSize();
+    }
+
+    public void setFloatBallIcon(Drawable icon) {
+        floatBall.setIcon(icon);
     }
 
     public void computeScreenSize() {

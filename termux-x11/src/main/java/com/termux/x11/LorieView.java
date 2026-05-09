@@ -50,6 +50,7 @@ import android.view.inputmethod.TextSnapshot;
 
 import androidx.annotation.Keep;
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 
 import com.termux.x11.controller.core.CursorLocker;
 import com.termux.x11.controller.winhandler.WinHandler;
@@ -371,10 +372,11 @@ public class LorieView extends SurfaceView implements InputStub {
     private static boolean hardwareKbdScancodesWorkaround = false;
     private final InputMethodManager mIMM = (InputMethodManager)getContext().getSystemService(Context.INPUT_METHOD_SERVICE);
     private Callback mCallback;
+    @Nullable
+    private LorieViewRuntimeApi.LorieHost mLorieHost;
     private final Point p = new Point();
     boolean commitedText = false;
     private final InputConnection mConnection = new InputConnectionWrapper(new BaseInputConnection(this, false) {
-        private final MainActivity a = MainActivity.getInstance();
         private CharSequence currentComposingText = null;
 
         // We can not inspect X windows and get currently edited text
@@ -506,8 +508,9 @@ public class LorieView extends SurfaceView implements InputStub {
 
             currentComposingText = reuse ? newText : null;
 
-            if (a.useTermuxEKBarBehaviour && a.mExtraKeys != null)
-                a.mExtraKeys.unsetSpecialKeys();
+            LorieViewRuntimeApi.LorieHost host = getLorieHost();
+            if (host.shouldUseTermuxExtraKeysBarBehaviour())
+                host.unsetExtraKeysSpecialKeys();
             commitedText = true;
             return true;
         }
@@ -639,6 +642,14 @@ public class LorieView extends SurfaceView implements InputStub {
         triggerCallback();
     }
 
+    public void clearCallback() {
+        mCallback = null;
+    }
+
+    public void setLorieHost(@Nullable LorieViewRuntimeApi.LorieHost host) {
+        mLorieHost = host;
+    }
+
     public void regenerate() {
         Callback callback = mCallback;
         mCallback = null;
@@ -679,8 +690,18 @@ public class LorieView extends SurfaceView implements InputStub {
         throw new NullPointerException();
     }
 
+    private LorieViewRuntimeApi.LorieHost getLorieHost() {
+        if (mLorieHost != null)
+            return mLorieHost;
+
+        Activity activity = getActivity();
+        if (activity instanceof LorieViewRuntimeApi.LorieHost)
+            return (LorieViewRuntimeApi.LorieHost) activity;
+        throw new IllegalStateException("LorieView requires an LorieViewRuntimeApi.LorieHost");
+    }
+
     void getDimensionsFromSettings() {
-        Prefs prefs = MainActivity.getPrefs();
+        Prefs prefs = getLorieHost().getX11Prefs();
         int width = getMeasuredWidth();
         int height = getMeasuredHeight();
         int w = width;
@@ -727,7 +748,7 @@ public class LorieView extends SurfaceView implements InputStub {
     protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
         super.onMeasure(widthMeasureSpec, heightMeasureSpec);
 
-        Prefs prefs = MainActivity.getPrefs();
+        Prefs prefs = getLorieHost().getX11Prefs();
         if (prefs.displayStretch.get()
             || "native".equals(prefs.displayResolutionMode.get())
             || "scaled".equals(prefs.displayResolutionMode.get())) {
@@ -790,7 +811,7 @@ public class LorieView extends SurfaceView implements InputStub {
         if (hardwareKbdScancodesWorkaround)
             return false;
 
-        return MainActivity.getInstance().handleKey(event);
+        return getLorieHost().handleKey(event);
     }
 
     @Override
@@ -820,7 +841,7 @@ public class LorieView extends SurfaceView implements InputStub {
         hardwareKbdScancodesWorkaround = p.hardwareKbdScancodesWorkaround.get();
         clipboardSyncEnabled = p.clipboardEnable.get();
         setClipboardSyncEnabled(clipboardSyncEnabled, clipboardSyncEnabled);
-        TouchInputHandler.refreshInputDevices();
+        TouchInputHandler.refreshInputDevices(getLorieHost());
     }
 
     // It is used in native code
@@ -882,7 +903,7 @@ public class LorieView extends SurfaceView implements InputStub {
 
     @Override
     public InputConnection onCreateInputConnection(EditorInfo outAttrs) {
-        if (MainActivity.getPrefs().enforceCharBasedInput.get())
+        if (getLorieHost().getX11Prefs().enforceCharBasedInput.get())
             outAttrs.inputType = InputType.TYPE_NULL;
         else
             outAttrs.inputType = InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS | InputType.TYPE_TEXT_VARIATION_NORMAL;

@@ -6,12 +6,19 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
+import android.graphics.Canvas;
+import android.graphics.Color;
+import android.graphics.ColorFilter;
+import android.graphics.Paint;
+import android.graphics.PixelFormat;
+import android.graphics.Rect;
+import android.graphics.RectF;
 import android.graphics.drawable.Drawable;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.preference.PreferenceManager;
 import android.widget.Toast;
-
-import androidx.appcompat.content.res.AppCompatResources;
 
 import com.termux.R;
 import com.termux.app.TermuxActivity;
@@ -21,9 +28,26 @@ import com.termux.floatball.menu.MenuItem;
 import com.termux.floatball.permission.FloatPermissionManager;
 import com.termux.floatball.utils.DensityUtil;
 import com.termux.floatball.widget.FloatBallCfg;
-import com.termux.x11.MainActivity;
+
+import java.io.BufferedReader;
+import java.io.FileReader;
+import java.io.IOException;
 
 public class FloatBallMenuClient {
+    private static final long CPU_LOAD_UPDATE_INTERVAL_MS = 2000;
+    private static final int[] CPU_LOAD_COLORS = {
+        0xff9bcf45,
+        0xffb8c947,
+        0xffd5bf45,
+        0xffe7a941,
+        0xffef8b3c,
+        0xffe96b39,
+        0xffd94b38,
+        0xffbd3038,
+        0xff9a2230,
+        0xff72151f
+    };
+
     private FloatBallManager mFloatballManager;
     private FloatPermissionManager mFloatPermissionManager;
     private ActivityLifeCycleListener mActivityLifeCycleListener = new ActivityLifeCycleListener();
@@ -31,9 +55,16 @@ public class FloatBallMenuClient {
     private TermuxActivity mTermuxActivity;
     private boolean mAppNotOnFront = false;
     private boolean mShowKeyboard = false;
-    private boolean mLockSlider = false;
-    private boolean mShowTerminal = false;
-    private boolean mShowPreference = false;
+    private final Handler mHandler = new Handler(Looper.getMainLooper());
+    private final CpuLoadSampler mCpuLoadSampler = new CpuLoadSampler();
+    private int mLastCpuUsagePercent = -1;
+    private final Runnable mCpuLoadIconUpdater = new Runnable() {
+        @Override
+        public void run() {
+            updateFloatBallLoadColor();
+            mHandler.postDelayed(this, CPU_LOAD_UPDATE_INTERVAL_MS);
+        }
+    };
 
     private FloatBallMenuClient() {
     }
@@ -45,6 +76,7 @@ public class FloatBallMenuClient {
     public void onCreate() {
         init();
         mFloatballManager.show();
+        startCpuLoadIconUpdater();
         //5 set float ball click handler
         if (mFloatballManager.getMenuItemSize() == 0) {
             toast(mTermuxActivity.getString(R.string.add_menu_item));
@@ -83,8 +115,8 @@ public class FloatBallMenuClient {
 
     private void init() {
 //      1 set position of float ball, set size, icon and drawable
-        int ballSize = DensityUtil.dip2px(mTermuxActivity, 40);
-        Drawable ballIcon = AppCompatResources.getDrawable(mTermuxActivity, R.drawable.icon_float_ball_shape);
+        int ballSize = DensityUtil.dip2px(mTermuxActivity, 42);
+        Drawable ballIcon = createFloatBallIcon(0);
 //      different config below
 //      FloatBallCfg ballCfg = new FloatBallCfg(ballSize, ballIcon);
 //      FloatBallCfg ballCfg = new FloatBallCfg(ballSize, ballIcon, FloatBallCfg.Gravity.LEFT_CENTER,false);
@@ -101,8 +133,8 @@ public class FloatBallMenuClient {
         }
         //2 display float ball menu
         //2.1 init float ball menu config, every size of menu item and number of item
-        int menuSize = DensityUtil.dip2px(mTermuxActivity, 110);
-        int menuItemSize = DensityUtil.dip2px(mTermuxActivity, 20);
+        int menuSize = DensityUtil.dip2px(mTermuxActivity, 124);
+        int menuItemSize = DensityUtil.dip2px(mTermuxActivity, 28);
         FloatMenuCfg menuCfg = new FloatMenuCfg(menuSize, menuItemSize);
         //3 create float ball Manager
         mFloatballManager = new FloatBallManager(ctx, ballCfg, menuCfg);
@@ -135,14 +167,6 @@ public class FloatBallMenuClient {
             }
 
         });
-    }
-
-    public void setTerminalShow(boolean showTerminal) {
-        mShowTerminal = showTerminal;
-    }
-
-    public void setShowPreference(boolean showPreference) {
-        mShowPreference = showPreference;
     }
 
     public class ActivityLifeCycleListener implements Application.ActivityLifecycleCallbacks {
@@ -190,23 +214,21 @@ public class FloatBallMenuClient {
         MenuItem terminalItem = new MenuItem(mTermuxActivity.getDrawable(R.drawable.icon_menu_start_terminal_shape)) {
             @Override
             public void action() {
-                boolean preState = mShowTerminal;
-                mShowTerminal = !mShowTerminal;
-                if (!preState) {
-                    mTermuxActivity.getMainContentView().setTerminalViewSwitchSlider(true);
-                    toast(mTermuxActivity.getString(R.string.open_terminal));
-                } else {
-                    mTermuxActivity.getMainContentView().setTerminalViewSwitchSlider(false);
-                    toast(mTermuxActivity.getString(R.string.hide_terminal));
-                }
+                mTermuxActivity.showTerminalSurface();
+                toast(mTermuxActivity.getString(R.string.open_terminal));
                 mFloatballManager.closeMenu();
             }
         };
         MenuItem stopItem = new MenuItem(mTermuxActivity.getDrawable(R.drawable.icon_menu_kill_current_process_shape)) {
             @Override
             public void action() {
-                mTermuxActivity.stopDesktop();
-                toast(mTermuxActivity.getString(R.string.terminate_current_process));
+                MainSurfaceController surfaceController = mTermuxActivity.getMainSurfaceController();
+                if (surfaceController != null && !surfaceController.isDisplayMode()) {
+                    mTermuxActivity.showDisplaySurface();
+                } else {
+                    mTermuxActivity.stopDesktop();
+                    toast(mTermuxActivity.getString(R.string.terminate_current_process));
+                }
                 mFloatballManager.closeMenu();
             }
         };
@@ -220,13 +242,9 @@ public class FloatBallMenuClient {
         MenuItem unLockLayoutItem = new MenuItem(mTermuxActivity.getDrawable(R.drawable.icon_menu_unlock_layout_shape)) {
             @Override
             public void action() {
-                if (mLockSlider) {
-                    mDrawable = mTermuxActivity.getDrawable(R.drawable.icon_menu_unlock_layout_open_shape);
-                } else {
-                    mDrawable = mTermuxActivity.getDrawable(R.drawable.icon_menu_unlock_layout_shape);
-                }
-                mLockSlider = !mLockSlider;
-                mTermuxActivity.getMainContentView().releaseSlider(true);
+                MainSurfaceController surfaceController = mTermuxActivity.getMainSurfaceController();
+                if (surfaceController != null)
+                    surfaceController.unlockDisplayStartDrawerGestureTemporarily();
                 toast(mTermuxActivity.getString(R.string.unlock_layout));
                 mFloatballManager.closeMenu();
             }
@@ -240,7 +258,7 @@ public class FloatBallMenuClient {
                     mDrawable = mTermuxActivity.getDrawable(R.drawable.icon_menu_show_keyboard_shape);
                 }
                 mShowKeyboard = !mShowKeyboard;
-                MainActivity.toggleKeyboardVisibility(mTermuxActivity);
+                mTermuxActivity.openSoftKeyboard();
                 mFloatballManager.closeMenu();
             }
         };
@@ -255,15 +273,8 @@ public class FloatBallMenuClient {
         MenuItem settingItem = new MenuItem(mTermuxActivity.getDrawable(R.drawable.icon_menu_show_setting_shape)) {
             @Override
             public void action() {
-                boolean preState = mShowPreference;
-                mShowPreference = !mShowPreference;
-                if (!preState) {
-                    mTermuxActivity.getMainContentView().setX11PreferenceSwitchSlider(true);
-                    toast(mTermuxActivity.getString(com.termux.x11.R.string.open_x11_settings));
-                } else {
-                    mTermuxActivity.getMainContentView().setX11PreferenceSwitchSlider(false);
-                    toast(mTermuxActivity.getString(com.termux.x11.R.string.hide_x11_settings));
-                }
+                mTermuxActivity.openX11Preferences(true);
+                toast(mTermuxActivity.getString(com.termux.x11.R.string.open_x11_settings));
                 mFloatballManager.closeMenu();
             }
         };
@@ -292,6 +303,7 @@ public class FloatBallMenuClient {
     }
 
     public void onDestroy() {
+        stopCpuLoadIconUpdater();
         onDetachedFromWindow();
         //unregister ActivityLifeCycle listener once register it, in case of memory leak
         mTermuxActivity.getApplication().unregisterActivityLifecycleCallbacks(mActivityLifeCycleListener);
@@ -299,5 +311,173 @@ public class FloatBallMenuClient {
 
     public boolean isGlobalFloatBallMenu() {
         return mFloatballManager.isFloatBallOverOtherApp();
+    }
+
+    private void startCpuLoadIconUpdater() {
+        mCpuLoadSampler.reset();
+        mLastCpuUsagePercent = -1;
+        mHandler.removeCallbacks(mCpuLoadIconUpdater);
+        mCpuLoadIconUpdater.run();
+    }
+
+    private void stopCpuLoadIconUpdater() {
+        mHandler.removeCallbacks(mCpuLoadIconUpdater);
+    }
+
+    private void updateFloatBallLoadColor() {
+        if (mFloatballManager == null)
+            return;
+
+        int usagePercent = mCpuLoadSampler.sampleUsagePercent();
+        if (usagePercent == mLastCpuUsagePercent)
+            return;
+
+        mLastCpuUsagePercent = usagePercent;
+        mFloatballManager.setFloatBallIcon(createFloatBallIcon(usagePercent));
+    }
+
+    private Drawable createFloatBallIcon(int usagePercent) {
+        int level = Math.max(0, Math.min(CPU_LOAD_COLORS.length - 1, usagePercent / 10));
+        return new CpuLoadDrawable(usagePercent, CPU_LOAD_COLORS[level]);
+    }
+
+    private static int darken(int color) {
+        return Color.rgb(
+            Math.max(0, (int) (Color.red(color) * 0.55f)),
+            Math.max(0, (int) (Color.green(color) * 0.55f)),
+            Math.max(0, (int) (Color.blue(color) * 0.55f)));
+    }
+
+    private static final class CpuLoadSampler {
+        private long lastIdle = -1;
+        private long lastTotal = -1;
+
+        void reset() {
+            lastIdle = -1;
+            lastTotal = -1;
+        }
+
+        int sampleUsagePercent() {
+            long[] cpuTimes = readCpuTimes();
+            if (cpuTimes == null)
+                return 0;
+
+            long idle = cpuTimes[0];
+            long total = cpuTimes[1];
+            if (lastTotal < 0) {
+                lastIdle = idle;
+                lastTotal = total;
+                return 0;
+            }
+
+            long idleDelta = idle - lastIdle;
+            long totalDelta = total - lastTotal;
+            lastIdle = idle;
+            lastTotal = total;
+            if (totalDelta <= 0)
+                return 0;
+
+            int usagePercent = (int) (((totalDelta - idleDelta) * 100) / totalDelta);
+            return Math.max(0, Math.min(100, usagePercent));
+        }
+
+        private long[] readCpuTimes() {
+            try (BufferedReader reader = new BufferedReader(new FileReader("/proc/stat"))) {
+                String line = reader.readLine();
+                if (line == null || !line.startsWith("cpu "))
+                    return null;
+
+                String[] values = line.trim().split("\\s+");
+                long idle = parseLong(values, 4) + parseLong(values, 5);
+                long total = 0;
+                for (int i = 1; i < values.length; i++)
+                    total += Long.parseLong(values[i]);
+                return new long[]{idle, total};
+            } catch (IOException | NumberFormatException e) {
+                return null;
+            }
+        }
+
+        private long parseLong(String[] values, int index) {
+            return index < values.length ? Long.parseLong(values[index]) : 0;
+        }
+    }
+
+    private static final class CpuLoadDrawable extends Drawable {
+        private final int usagePercent;
+        private final int color;
+        private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        private final RectF rect = new RectF();
+
+        CpuLoadDrawable(int usagePercent, int color) {
+            this.usagePercent = usagePercent;
+            this.color = color;
+        }
+
+        @Override
+        public void draw(Canvas canvas) {
+            Rect bounds = getBounds();
+            float width = bounds.width();
+            float height = bounds.height();
+            float size = Math.min(width, height);
+            float cx = bounds.left + width / 2f;
+            float cy = bounds.top + height / 2f;
+            float radius = size / 2f;
+            int textColor = usagePercent >= 60 ? Color.WHITE : 0xff101510;
+
+            paint.setStyle(Paint.Style.FILL);
+            paint.setColor(withAlpha(color, 58));
+            canvas.drawCircle(cx, cy, radius * 0.98f, paint);
+            paint.setColor(withAlpha(color, 92));
+            canvas.drawCircle(cx, cy, radius * 0.86f, paint);
+            paint.setColor(withAlpha(0xff000000, 66));
+            canvas.drawCircle(cx, cy, radius * 0.73f, paint);
+
+            paint.setColor(color);
+            canvas.drawCircle(cx, cy, radius * 0.68f, paint);
+
+            paint.setStyle(Paint.Style.STROKE);
+            paint.setStrokeWidth(Math.max(1f, size * 0.035f));
+            paint.setColor(withAlpha(Color.WHITE, 105));
+            canvas.drawCircle(cx, cy, radius * 0.58f, paint);
+
+            paint.setStyle(Paint.Style.FILL);
+            paint.setColor(textColor);
+            paint.setTextAlign(Paint.Align.CENTER);
+            paint.setFakeBoldText(true);
+            String value = String.valueOf(usagePercent);
+            float textSize = size * (value.length() >= 3 ? 0.32f : 0.40f);
+            paint.setTextSize(textSize);
+            Paint.FontMetrics fontMetrics = paint.getFontMetrics();
+            float baseline = cy - (fontMetrics.ascent + fontMetrics.descent) / 2f;
+            canvas.drawText(value, cx - size * 0.03f, baseline, paint);
+
+            paint.setFakeBoldText(false);
+            paint.setTextSize(size * 0.16f);
+            canvas.drawText("%", cx + size * 0.22f, cy - size * 0.06f, paint);
+
+            paint.setStyle(Paint.Style.STROKE);
+            paint.setStrokeWidth(Math.max(1f, size * 0.025f));
+            paint.setColor(withAlpha(darken(color), 150));
+            rect.set(cx - radius * 0.67f, cy - radius * 0.67f, cx + radius * 0.67f, cy + radius * 0.67f);
+            canvas.drawOval(rect, paint);
+        }
+
+        @Override
+        public void setAlpha(int alpha) {
+        }
+
+        @Override
+        public void setColorFilter(ColorFilter colorFilter) {
+        }
+
+        @Override
+        public int getOpacity() {
+            return PixelFormat.TRANSLUCENT;
+        }
+
+        private static int withAlpha(int color, int alpha) {
+            return Color.argb(alpha, Color.red(color), Color.green(color), Color.blue(color));
+        }
     }
 }

@@ -43,6 +43,10 @@ import java.util.Timer;
 import java.util.TimerTask;
 
 public class InputControlsView extends View {
+    public interface PassthroughTouchDispatcher {
+        boolean dispatchTouchEvent(MotionEvent event);
+    }
+
     public static final float DEFAULT_OVERLAY_OPACITY = 0.4f;
     public static final byte MAX_TAP_TRAVEL_DISTANCE = 10;
     public static final short MAX_TAP_MILLISECONDS = 200;
@@ -56,6 +60,11 @@ public class InputControlsView extends View {
     private boolean readyToDraw = false;
     private boolean moveCursor = false;
     private int snappingSize;
+    private int controlLayoutWidth;
+    private int controlLayoutHeight;
+    private float controlLayoutScale = 1.0f;
+    private float controlLayoutOffsetX;
+    private float controlLayoutOffsetY;
     private float offsetX;
     private float offsetY;
     private ControlElement selectedElement;
@@ -63,6 +72,7 @@ public class InputControlsView extends View {
     private float overlayOpacity = DEFAULT_OVERLAY_OPACITY;
     private TouchpadView touchpadView;
     private LorieView xServer;
+    private PassthroughTouchDispatcher passthroughTouchDispatcher;
     private final Bitmap[] icons = new Bitmap[17];
     private Timer mouseMoveTimer;
     private final PointF mouseMoveOffset = new PointF();
@@ -127,10 +137,12 @@ public class InputControlsView extends View {
             readyToDraw = false;
             return;
         }
-        snappingSize = Math.max(width, height) / 100;
+        updateControlLayoutGeometry(width, height);
 
         readyToDraw = true;
 
+        canvas.save();
+        applyControlLayoutTransform(canvas);
         if (editMode) {
             drawGrid(canvas);
             drawCursor(canvas);
@@ -142,8 +154,61 @@ public class InputControlsView extends View {
             if (showTouchscreenControls)
                 for (ControlElement element : profile.getElements()) element.draw(canvas);
         }
+        canvas.restore();
 
         super.onDraw(canvas);
+    }
+
+    private void updateControlLayoutGeometry(int width, int height) {
+        int previousSnappingSize = snappingSize;
+        int previousLayoutWidth = controlLayoutWidth;
+        int previousLayoutHeight = controlLayoutHeight;
+
+        controlLayoutWidth = Math.max(width, height);
+        controlLayoutHeight = Math.min(width, height);
+        snappingSize = Math.max(1, controlLayoutWidth / 100);
+        controlLayoutWidth = Math.max(snappingSize, (int) Mathf.roundTo(controlLayoutWidth, snappingSize));
+        controlLayoutHeight = Math.max(snappingSize, (int) Mathf.roundTo(controlLayoutHeight, snappingSize));
+        controlLayoutScale = Math.min((float) width / controlLayoutWidth, (float) height / controlLayoutHeight);
+        controlLayoutOffsetX = (width - controlLayoutWidth * controlLayoutScale) * 0.5f;
+        controlLayoutOffsetY = (height - controlLayoutHeight * controlLayoutScale) * 0.5f;
+
+        if (profile != null && profile.isElementsLoaded()
+            && (snappingSize != previousSnappingSize
+            || controlLayoutWidth != previousLayoutWidth
+            || controlLayoutHeight != previousLayoutHeight)) {
+            for (ControlElement element : profile.getElements()) {
+                element.invalidateGeometry();
+            }
+        }
+    }
+
+    private void ensureControlLayoutGeometry() {
+        int width = getWidth();
+        int height = getHeight();
+        if (width > 0 && height > 0)
+            updateControlLayoutGeometry(width, height);
+    }
+
+    private void applyControlLayoutTransform(Canvas canvas) {
+        canvas.translate(controlLayoutOffsetX, controlLayoutOffsetY);
+        canvas.scale(controlLayoutScale, controlLayoutScale);
+    }
+
+    private float toControlLayoutX(float x) {
+        return (x - controlLayoutOffsetX) / controlLayoutScale;
+    }
+
+    private float toControlLayoutY(float y) {
+        return (y - controlLayoutOffsetY) / controlLayoutScale;
+    }
+
+    private float toViewX(float x) {
+        return x * controlLayoutScale + controlLayoutOffsetX;
+    }
+
+    private float toViewY(float y) {
+        return y * controlLayoutScale + controlLayoutOffsetY;
     }
 
     private void drawGrid(Canvas canvas) {
@@ -293,12 +358,27 @@ public class InputControlsView extends View {
         createMouseMoveTimer();
     }
 
+    public void setPassthroughTouchDispatcher(PassthroughTouchDispatcher passthroughTouchDispatcher) {
+        this.passthroughTouchDispatcher = passthroughTouchDispatcher;
+    }
+
+    private boolean dispatchPassthroughTouchEvent(MotionEvent event) {
+        if (passthroughTouchDispatcher != null) {
+            return passthroughTouchDispatcher.dispatchTouchEvent(event);
+        }
+        return touchpadView != null && touchpadView.onTouchEvent(event);
+    }
+
     public int getMaxWidth() {
-        return (int) Mathf.roundTo(getWidth(), snappingSize);
+        return controlLayoutWidth;
     }
 
     public int getMaxHeight() {
-        return (int) Mathf.roundTo(getHeight(), snappingSize);
+        return controlLayoutHeight;
+    }
+
+    public float[] computeTouchpadDeltaPoint(float lastX, float lastY, float x, float y) {
+        return touchpadView.computeDeltaPoint(toViewX(lastX), toViewY(lastY), toViewX(x), toViewY(y));
     }
 
     private void createMouseMoveTimer() {
@@ -358,16 +438,17 @@ public class InputControlsView extends View {
 
     @Override
     public boolean onHoverEvent(MotionEvent event) {
-        return touchpadView.onHoverEvent(event);
+        return dispatchPassthroughTouchEvent(event);
     }
 
     @Override
     public boolean onTouchEvent(MotionEvent event) {
+        ensureControlLayoutGeometry();
         if (editMode && readyToDraw) {
             switch (event.getAction()) {
                 case MotionEvent.ACTION_DOWN: {
-                    float x = event.getX();
-                    float y = event.getY();
+                    float x = toControlLayoutX(event.getX());
+                    float y = toControlLayoutY(event.getY());
 
                     ControlElement element = intersectElement(x, y);
                     moveCursor = true;
@@ -381,8 +462,8 @@ public class InputControlsView extends View {
                 }
                 case MotionEvent.ACTION_MOVE: {
                     if (selectedElement != null) {
-                        selectedElement.setX((int) Mathf.roundTo(event.getX() - offsetX, snappingSize));
-                        selectedElement.setY((int) Mathf.roundTo(event.getY() - offsetY, snappingSize));
+                        selectedElement.setX((int) Mathf.roundTo(toControlLayoutX(event.getX()) - offsetX, snappingSize));
+                        selectedElement.setY((int) Mathf.roundTo(toControlLayoutY(event.getY()) - offsetY, snappingSize));
                         invalidate();
                     }
                     break;
@@ -390,30 +471,36 @@ public class InputControlsView extends View {
                 case MotionEvent.ACTION_UP: {
                     if (selectedElement != null && profile != null) profile.save();
                     if (moveCursor)
-                        cursor.set((int) Mathf.roundTo(event.getX(), snappingSize), (int) Mathf.roundTo(event.getY(), snappingSize));
+                        cursor.set((int) Mathf.roundTo(toControlLayoutX(event.getX()), snappingSize), (int) Mathf.roundTo(toControlLayoutY(event.getY()), snappingSize));
                     invalidate();
                     break;
                 }
             }
         }
+        if (!editMode) {
+            return handleTouchEvent(event);
+        }
         return true;
     }
 
     public boolean handleTouchEvent(MotionEvent event) {
+        ensureControlLayoutGeometry();
         if (event.isFromSource(InputDevice.SOURCE_MOUSE)){
-            return touchpadView.onTouchEvent(event);
+            return dispatchPassthroughTouchEvent(event);
         }
         if (!editMode && profile != null) {
             int actionIndex = event.getActionIndex();
             int pointerId = event.getPointerId(actionIndex);
             int actionMasked = event.getActionMasked();
             boolean handled = false;
+            boolean passthroughHandled = false;
+            boolean passthroughDispatched = false;
 //            Log.d("handleTouchEvent",String.valueOf(event.getAction()));
             switch (actionMasked) {
                 case MotionEvent.ACTION_DOWN:
                 case MotionEvent.ACTION_POINTER_DOWN: {
-                    float x = event.getX(actionIndex);
-                    float y = event.getY(actionIndex);
+                    float x = toControlLayoutX(event.getX(actionIndex));
+                    float y = toControlLayoutY(event.getY(actionIndex));
                     touchpadView.setPointerButtonLeftEnabled(true);
                     for (ControlElement element : profile.getElements()) {
                         if (element.handleTouchDown(pointerId, x, y)) {
@@ -424,22 +511,25 @@ public class InputControlsView extends View {
                         }
                     }
                     if (!handled) {
-                        touchpadView.onTouchEvent(event);
+                        passthroughHandled = dispatchPassthroughTouchEvent(event);
+                        passthroughDispatched = true;
                     }
                     break;
                 }
                 case MotionEvent.ACTION_MOVE: {
                     for (byte i = 0, count = (byte) event.getPointerCount(); i < count; i++) {
-                        float x = event.getX(i);
-                        float y = event.getY(i);
-                        handled = false;
+                        float x = toControlLayoutX(event.getX(i));
+                        float y = toControlLayoutY(event.getY(i));
+                        boolean pointerHandled = false;
                         for (ControlElement element : profile.getElements()) {
                             if (element.handleTouchMove(i, x, y)) {
-                                handled = true;
+                                pointerHandled = true;
                             }
                         }
-                        if (!handled) {
-                            touchpadView.onTouchEvent(event);
+                        handled |= pointerHandled;
+                        if (!pointerHandled && !passthroughDispatched) {
+                            passthroughHandled = dispatchPassthroughTouchEvent(event);
+                            passthroughDispatched = true;
                         }
                     }
                     break;
@@ -448,21 +538,22 @@ public class InputControlsView extends View {
                 case MotionEvent.ACTION_POINTER_UP:
                 case MotionEvent.ACTION_CANCEL:
                     for (byte i = 0, count = (byte) event.getPointerCount(); i < count; i++) {
-                        float x = event.getX(i);
-                        float y = event.getY(i);
+                        float x = toControlLayoutX(event.getX(i));
+                        float y = toControlLayoutY(event.getY(i));
                         for (ControlElement element : profile.getElements())
                             if (element.handleTouchUp(pointerId, x, y)) {
                                 handled = true;
                             }
-                        if (!handled) {
-                            touchpadView.onTouchEvent(event);
+                        if (!handled && !passthroughDispatched) {
+                            passthroughHandled = dispatchPassthroughTouchEvent(event);
+                            passthroughDispatched = true;
                         }
                     }
                     break;
             }
-            return handled;
+            return handled || passthroughHandled;
         }
-        return false;
+        return dispatchPassthroughTouchEvent(event);
     }
 
     public void handleInputEvent(Binding binding, boolean isActionDown) {

@@ -28,7 +28,7 @@ extern volatile int conn_fd; // The only variable from shared with X server code
 struct {
     jclass self;
     jmethodID getInstance, clientConnectedStateChanged, resetIme, onRenderConnectionChanged;
-} MainActivity = {0};
+} LorieViewRuntimeRegistry = {0};
 
 struct {
     jclass self;
@@ -117,11 +117,11 @@ static void nativeInit(JNIEnv *env, jobject thiz) {
         CharBuffer.self = FindClassOrDie(env,  "java/nio/CharBuffer");
         CharBuffer.toString = FindMethodOrDie(env, CharBuffer.self, "toString", "()Ljava/lang/String;", JNI_FALSE);
 
-        MainActivity.self = FindClassOrDie(env,  "com/termux/x11/MainActivity");
-        MainActivity.getInstance = FindMethodOrDie(env, MainActivity.self, "getInstance", "()Lcom/termux/x11/MainActivity;", JNI_TRUE);
-        MainActivity.clientConnectedStateChanged = FindMethodOrDie(env, MainActivity.self, "clientConnectedStateChanged", "()V", JNI_FALSE);
-        MainActivity.resetIme = FindMethodOrDie(env, (*env)->GetObjectClass(env, thiz), "resetIme", "()V", JNI_FALSE);
-        MainActivity.onRenderConnectionChanged = FindMethodOrDie(env, MainActivity.self, "onRenderConnectionChanged", "()V", JNI_FALSE);
+        LorieViewRuntimeRegistry.self = FindClassOrDie(env,  "com/termux/x11/LorieViewRuntimeRegistry");
+        LorieViewRuntimeRegistry.getInstance = FindMethodOrDie(env, LorieViewRuntimeRegistry.self, "getInstance", "()Lcom/termux/x11/LorieViewRuntimeRegistry;", JNI_TRUE);
+        LorieViewRuntimeRegistry.clientConnectedStateChanged = FindMethodOrDie(env, LorieViewRuntimeRegistry.self, "clientConnectedStateChanged", "()V", JNI_FALSE);
+        LorieViewRuntimeRegistry.resetIme = FindMethodOrDie(env, (*env)->GetObjectClass(env, thiz), "resetIme", "()V", JNI_FALSE);
+        LorieViewRuntimeRegistry.onRenderConnectionChanged = FindMethodOrDie(env, LorieViewRuntimeRegistry.self, "onRenderConnectionChanged", "()V", JNI_FALSE);
     }
 
     (*env)->GetJavaVM(env, &vm);
@@ -137,9 +137,9 @@ static int xcallback(int fd, int events, __unused void* data) {
     jobject thiz = globalThiz;
 
     if (events & (ALOOPER_EVENT_ERROR | ALOOPER_EVENT_HANGUP)) {
-        jobject instance = (*env)->CallStaticObjectMethod(env, MainActivity.self, MainActivity.getInstance);
+        jobject instance = (*env)->CallStaticObjectMethod(env, LorieViewRuntimeRegistry.self, LorieViewRuntimeRegistry.getInstance);
         if (instance)
-            (*env)->CallVoidMethod(env, instance, MainActivity.clientConnectedStateChanged);
+            (*env)->CallVoidMethod(env, instance, LorieViewRuntimeRegistry.clientConnectedStateChanged);
 
         ALooper_removeFd(ALooper_forThread(), fd);
         close(conn_fd);
@@ -209,7 +209,7 @@ static int xcallback(int fd, int events, __unused void* data) {
                     break;
                 }
                 case EVENT_WINDOW_FOCUS_CHANGED: {
-                    (*env)->CallVoidMethod(env, thiz, MainActivity.resetIme);
+                    (*env)->CallVoidMethod(env, thiz, LorieViewRuntimeRegistry.resetIme);
                 }
             }
         }
@@ -300,7 +300,7 @@ static void sendWindowChange(__unused JNIEnv* env, __unused jobject cls, jint wi
 static void sendMouseEvent(__unused JNIEnv* env, __unused jobject cls, jfloat x, jfloat y, jint which_button, jboolean button_down, jboolean relative) {
     if (conn_fd != -1) {
         if (which_button > 0)
-            (*env)->CallVoidMethod(env, globalThiz, MainActivity.resetIme);
+            (*env)->CallVoidMethod(env, globalThiz, LorieViewRuntimeRegistry.resetIme);
         lorieEvent e = { .mouse = { .t = EVENT_MOUSE, .x = x, .y = y, .detail = which_button, .down = button_down, .relative = relative } };
         write(conn_fd, &e, sizeof(e));
     }
@@ -317,7 +317,7 @@ static void sendStylusEvent(__unused JNIEnv *env, __unused jobject thiz, jfloat 
                             jint pressure, jint tilt_x, jint tilt_y,
                             jint orientation, jint buttons, jboolean eraser, jboolean mouse) {
     if (conn_fd != -1) {
-        (*env)->CallVoidMethod(env, globalThiz, MainActivity.resetIme);
+        (*env)->CallVoidMethod(env, globalThiz, LorieViewRuntimeRegistry.resetIme);
         lorieEvent e = { .stylus = { .t = EVENT_STYLUS, .x = x, .y = y, .pressure = pressure, .tilt_x = tilt_x, .tilt_y = tilt_y, .orientation = orientation, .buttons = buttons, .eraser = eraser, .mouse = mouse } };
         write(conn_fd, &e, sizeof(e));
     }

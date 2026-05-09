@@ -203,7 +203,7 @@ public class CmdEntryPoint extends ICmdEntryInterface.Stub {
             }
         } else {
             // It is critical only when it is not running in Android application process
-            if (MainActivity.getInstance() == null) {
+            if (!LorieViewRuntimeRegistry.hasLiveInstance()) {
                 System.err.println("Failed to acquire native library. Did you install the right apk? Try the universal one.");
                 System.exit(134);
             }

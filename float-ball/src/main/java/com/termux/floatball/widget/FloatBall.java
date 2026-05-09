@@ -354,6 +354,11 @@ public class FloatBall extends FrameLayout implements ICarrier {
         return mSize;
     }
 
+    public void setIcon(Drawable icon) {
+        mConfig.mIcon = icon;
+        Util.setBackground(imageView, icon);
+    }
+
     private void onClick() {
         floatBallManager.floatBallX = mLayoutParams.x;
         floatBallManager.floatBallY = mLayoutParams.y;

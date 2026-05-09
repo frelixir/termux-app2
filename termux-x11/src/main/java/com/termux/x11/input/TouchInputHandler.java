@@ -4,6 +4,8 @@
 
 package com.termux.x11.input;
 
+import com.termux.x11.LorieViewRuntimeApi;
+
 import static android.view.InputDevice.KEYBOARD_TYPE_ALPHABETIC;
 import static android.view.KeyEvent.ACTION_DOWN;
 import static android.view.KeyEvent.KEYCODE_BACK;
@@ -11,6 +13,7 @@ import static android.view.KeyEvent.KEYCODE_VOLUME_DOWN;
 import static android.view.KeyEvent.KEYCODE_VOLUME_UP;
 
 import android.annotation.SuppressLint;
+import android.app.Activity;
 import android.app.PendingIntent;
 import android.content.Context;
 import android.content.Intent;
@@ -34,7 +37,6 @@ import androidx.core.math.MathUtils;
 
 import com.termux.x11.LoriePreferences;
 import com.termux.x11.LorieView;
-import com.termux.x11.MainActivity;
 import com.termux.x11.Prefs;
 import com.termux.x11.utils.SamsungDexUtils;
 
@@ -91,7 +93,8 @@ public class TouchInputHandler {
 
     private InputStrategyInterface mInputStrategy;
     private final InputEventSender mInjector;
-    private final MainActivity mActivity;
+    private final LorieViewRuntimeApi.InputHost mHost;
+    private final Activity mActivity;
     private final DisplayMetrics mMetrics = new DisplayMetrics();
 
     private final BiConsumer<Integer, Boolean> noAction = (key, down) -> {};
@@ -167,14 +170,16 @@ public class TouchInputHandler {
         return ((currentBS & mask) != 0);
     }
 
-    private TouchInputHandler(MainActivity activity, RenderData renderData,
+    private TouchInputHandler(LorieViewRuntimeApi.InputHost host, RenderData renderData,
                               final InputEventSender injector, boolean isTouchpad) {
         if (injector == null)
             throw new NullPointerException();
 
         mRenderData = renderData != null ? renderData :new RenderData();
         mInjector = injector;
-        mActivity = activity;
+        mHost = host;
+        mActivity = host.getActivity();
+        mInjector.setReleaseCaptureCallback(() -> setCapturingEnabled(false));
         if (mDisplayManager == null) {
             mDisplayManager = (DisplayManager) mActivity.getSystemService(Context.DISPLAY_SERVICE);
             mDisplayRotation = mDisplayManager.getDisplay(Display.DEFAULT_DISPLAY).getRotation() % 4;
@@ -182,7 +187,7 @@ public class TouchInputHandler {
         }
 
         GestureListener listener = new GestureListener();
-        mScroller = new GestureDetector(/*desktop*/ activity, listener, null, false);
+        mScroller = new GestureDetector(/*desktop*/ mActivity, listener, null, false);
 
         // If long-press is enabled, the gesture-detector will not emit any further onScroll
         // notifications after the onLongPress notification. Since onScroll is being used for
@@ -190,35 +195,35 @@ public class TouchInputHandler {
         // down too long.
         mScroller.setIsLongpressEnabled(false);
 
-        mTapDetector = new TapGestureDetector(/*desktop*/ activity, listener);
-        mSwipePinchDetector = new SwipeDetector(/*desktop*/ activity);
+        mTapDetector = new TapGestureDetector(/*desktop*/ mActivity, listener);
+        mSwipePinchDetector = new SwipeDetector(/*desktop*/ mActivity);
 
         // The threshold needs to be bigger than the ScaledTouchSlop used by the gesture-detectors,
         // so that a gesture cannot be both a tap and a swipe. It also needs to be small enough so
         // that intentional swipes are usually detected.
-        float density = /*desktop*/ activity.getResources().getDisplayMetrics().density;
+        float density = /*desktop*/ mActivity.getResources().getDisplayMetrics().density;
         mSwipeThreshold = 40 * density;
 
 //        mEdgeSlopInPx = ViewConfiguration.get(/*desktop*/ ctx).getScaledEdgeSlop();
 
         setInputMode(InputMode.TRACKPAD);
-        mDexListener = new DexListener(activity);
-        mTouchpadHandler = isTouchpad ? null : new TouchInputHandler(activity, mRenderData, injector, true);
+        mDexListener = new DexListener(mActivity);
+        mTouchpadHandler = isTouchpad ? null : new TouchInputHandler(host, mRenderData, injector, true);
 
-        refreshInputDevices();
+        refreshInputDevices(mHost);
         ((InputManager) mActivity.getSystemService(Context.INPUT_SERVICE)).registerInputDeviceListener(new InputManager.InputDeviceListener() {
             @Override
             public void onInputDeviceAdded(int deviceId) {
                 InputDevice dev = InputDevice.getDevice(deviceId);
                 String name = dev != null ? dev.getName() : "null";
                 android.util.Log.d("InputDeviceListener", "added " + name);
-                refreshInputDevices();
+                refreshInputDevices(mHost);
             }
 
             @Override
             public void onInputDeviceRemoved(int deviceId) {
                 android.util.Log.d("InputDeviceListener", "device removed");
-                refreshInputDevices();
+                refreshInputDevices(mHost);
             }
 
             @Override
@@ -226,17 +231,17 @@ public class TouchInputHandler {
                 InputDevice dev = InputDevice.getDevice(deviceId);
                 String name = dev != null ? dev.getName() : "null";
                 android.util.Log.d("InputDeviceListener", "changed " + name);
-                refreshInputDevices();
+                refreshInputDevices(mHost);
             }
         }, null);
 
     }
 
-    public TouchInputHandler(MainActivity activity, final InputEventSender injector) {
-        this(activity, null, injector, false);
+    public TouchInputHandler(LorieViewRuntimeApi.InputHost host, final InputEventSender injector) {
+        this(host, null, injector, false);
     }
 
-    static public void refreshInputDevices() {
+    static public void refreshInputDevices(LorieViewRuntimeApi.InputHost host) {
         AtomicBoolean stylusAvailable = new AtomicBoolean(false);
         AtomicBoolean externalKeyboardAvailable = new AtomicBoolean(false);
         android.util.Log.d("DEVICES", "external keyboard connected " + stylusAvailable.get());
@@ -259,7 +264,7 @@ public class TouchInputHandler {
         android.util.Log.d("DEVICES", "requesting stylus " + stylusAvailable.get());
         android.util.Log.d("DEVICES", "external keyboard connected " + externalKeyboardAvailable.get());
         LorieView.requestStylusEnabled(stylusAvailable.get());
-        MainActivity.getInstance().setExternalKeyboardConnected(externalKeyboardAvailable.get());
+        host.setExternalKeyboardConnected(externalKeyboardAvailable.get());
     }
 
 
@@ -389,7 +394,7 @@ public class TouchInputHandler {
             mTouchpadHandler.handleHostSizeChanged(w, h);
 
         resetTransformation();
-        MainActivity.getRealMetrics(mMetrics);
+        updateRealMetrics();
     }
 
     public void setInputMode(@InputMode int inputMode) {
@@ -405,9 +410,9 @@ public class TouchInputHandler {
 
     public void setCapturingEnabled(boolean enabled) {
         if (mInjector.pointerCapture && enabled)
-            mActivity.getLorieView().requestPointerCapture();
+            mHost.getLorieView().requestPointerCapture();
         else
-            mActivity.getLorieView().releasePointerCapture();
+            mHost.getLorieView().releasePointerCapture();
 
         if (mInjector.pauseKeyInterceptingWithEsc) {
             if (mInjector.dexMetaKeyCapture)
@@ -460,12 +465,12 @@ public class TouchInputHandler {
                 capturedPointerTransformation = CapturedPointerTransformation.NONE;
         }
 
-        MainActivity.getRealMetrics(mMetrics);
+        updateRealMetrics();
 
-        if (!p.pointerCapture.get() && mActivity.getLorieView().hasPointerCapture())
-            mActivity.getLorieView().releasePointerCapture();
+        if (!p.pointerCapture.get() && mHost.getLorieView().hasPointerCapture())
+            mHost.getLorieView().releasePointerCapture();
 
-        keyIntercepting = !mInjector.pauseKeyInterceptingWithEsc || mActivity.getLorieView().hasPointerCapture();
+        keyIntercepting = !mInjector.pauseKeyInterceptingWithEsc || mHost.getLorieView().hasPointerCapture();
         SamsungDexUtils.dexMetaKeyCapture(mActivity, mInjector.dexMetaKeyCapture && keyIntercepting);
 
         swipeUpAction = extractUserActionFromPreferences(p, "swipeUp");
@@ -485,16 +490,16 @@ public class TouchInputHandler {
             return noAction;
 
         switch(pref.asList().get()) {
-            case "toggle soft keyboard": return (key, down) -> {if(key==KEY_BACK&&p.enableFloatBallMenu.get()){return;} if (down) MainActivity.toggleKeyboardVisibility(mActivity); };
-            case "toggle additional key bar": return (key, down) -> { if (down) mActivity.toggleExtraKeys(); };
-            case "open preferences": return (key, down) -> { if (down) mActivity.openPreference(true);};
-            case "restart activity":return (key, down) -> {if(down)mActivity.stopDesktop();};
+            case "toggle soft keyboard": return (key, down) -> {if(key==KEY_BACK&&p.enableFloatBallMenu.get()){return;} if (down) mHost.toggleKeyboardVisibility(); };
+            case "toggle additional key bar": return (key, down) -> { if (down) mHost.toggleExtraKeys(); };
+            case "open preferences": return (key, down) -> { if (down) mHost.openPreference(true);};
+            case "restart activity":return (key, down) -> {if(down)mHost.stopDesktop();};
             case "release pointer and keyboard capture": return (key, down) -> { if (down) setCapturingEnabled(false); };
-            case "toggle fullscreen": return (key, down) -> { if (down) MainActivity.prefs.fullscreen.put(!MainActivity.prefs.fullscreen.get()); };
-            case "exit": return (key, down) -> { if (down) mActivity.prepareToExit();};
-            case "send volume up": return (key, down) -> mActivity.getLorieView().sendKeyEvent(0, KEYCODE_VOLUME_UP, down);
-            case "send volume down": return (key, down) -> mActivity.getLorieView().sendKeyEvent(0, KEYCODE_VOLUME_DOWN, down);
-            case "send media action": return (key, down) -> mActivity.getLorieView().sendKeyEvent(0, key, down);
+            case "toggle fullscreen": return (key, down) -> { if (down) p.fullscreen.put(!p.fullscreen.get()); };
+            case "exit": return (key, down) -> { if (down) mHost.prepareToExit();};
+            case "send volume up": return (key, down) -> mHost.getLorieView().sendKeyEvent(0, KEYCODE_VOLUME_UP, down);
+            case "send volume down": return (key, down) -> mHost.getLorieView().sendKeyEvent(0, KEYCODE_VOLUME_DOWN, down);
+            case "send media action": return (key, down) -> mHost.getLorieView().sendKeyEvent(0, key, down);
             default: return noAction;
         }
     }
@@ -518,7 +523,7 @@ public class TouchInputHandler {
             case "toggle soft keyboard":
             case "toggle additional key bar":
             case "release pointer and keyboard capture":
-                return PendingIntent.getBroadcast(mActivity, requestCode, new Intent(MainActivity.ACTION_CUSTOM) {{
+                return PendingIntent.getBroadcast(mActivity, requestCode, new Intent(LorieViewRuntimeApi.InputHost.ACTION_CUSTOM) {{
                     putExtra("what", name);
                     setPackage(mActivity.getPackageName());
                 }}, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
@@ -792,9 +797,9 @@ public class TouchInputHandler {
     public boolean sendKeyEvent(KeyEvent e) {
         int k = e.getKeyCode();
 
-        if (!MainActivity.mLorieViewConnected) {
+        if (!mHost.getX11DisplayController().isConnected()) {
             if (e.getKeyCode() == KEYCODE_BACK&&e.getAction()==ACTION_DOWN) {
-                mActivity.prepareToExit();
+                mHost.prepareToExit();
             }
 
             return false;
@@ -829,7 +834,7 @@ public class TouchInputHandler {
                 if (e.getRepeatCount() != 0) // ignore auto-repeat
                     return true;
                 if (e.getAction() == KeyEvent.ACTION_UP || e.getAction() == KeyEvent.ACTION_DOWN)
-                    mActivity.getLorieView().sendMouseEvent(-1, -1, InputStub.BUTTON_RIGHT, e.getAction() == KeyEvent.ACTION_DOWN, true);
+                    mHost.getLorieView().sendMouseEvent(-1, -1, InputStub.BUTTON_RIGHT, e.getAction() == KeyEvent.ACTION_DOWN, true);
                 return true;
             }
 
@@ -840,6 +845,11 @@ public class TouchInputHandler {
         }
 
         return mInjector.sendKeyEvent(e);
+    }
+
+    private void updateRealMetrics() {
+        if (mHost.getLorieView() != null && mHost.getLorieView().getDisplay() != null)
+            mHost.getLorieView().getDisplay().getRealMetrics(mMetrics);
     }
 
     private class HardwareMouseListener {
@@ -962,7 +972,7 @@ public class TouchInputHandler {
             boolean hasTilt = e.getDevice().getMotionRange(MotionEvent.AXIS_TILT) != null;
             boolean hasOrientation = e.getDevice().getMotionRange(MotionEvent.AXIS_ORIENTATION) != null;
 
-            if (MainActivity.getInstance().getLorieView().hasPointerCapture() &&
+            if (mHost.getLorieView().hasPointerCapture() &&
                 isExternal(dev) && rangeX != null && rangeY != null) {
                 newX *= mRenderData.imageWidth / rangeX.getMax();
                 newY *= mRenderData.imageHeight / rangeY.getMax();

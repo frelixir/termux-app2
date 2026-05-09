@@ -1,11 +1,9 @@
 package com.termux.app.terminal.io;
 
 import android.annotation.SuppressLint;
-import android.view.Gravity;
 import android.view.View;
 
 import androidx.annotation.NonNull;
-import androidx.drawerlayout.widget.DrawerLayout;
 
 import com.termux.app.TermuxActivity;
 import com.termux.app.terminal.TermuxTerminalSessionActivityClient;
@@ -88,11 +86,7 @@ public class TermuxTerminalExtraKeys extends TerminalExtraKeys {
             if(mTermuxTerminalViewClient != null)
                 mTermuxTerminalViewClient.onToggleSoftKeyboardRequest();
         } else if ("DRAWER".equals(key)) {
-            DrawerLayout drawerLayout = mTermuxTerminalViewClient.getActivity().getDrawer();
-            if (drawerLayout.isDrawerOpen(Gravity.LEFT))
-                drawerLayout.closeDrawer(Gravity.LEFT);
-            else
-                drawerLayout.openDrawer(Gravity.LEFT);
+            mTermuxTerminalViewClient.getActivity().toggleStartDrawerExplicitly();
         } else if ("PASTE".equals(key)) {
             if(mTermuxTerminalSessionActivityClient != null)
                 mTermuxTerminalSessionActivityClient.onPasteTextFromClipboard(null);

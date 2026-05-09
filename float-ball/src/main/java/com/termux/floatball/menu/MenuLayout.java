@@ -129,7 +129,7 @@ public class MenuLayout extends ViewGroup implements ICarrier {
         }
     }
 
-    private int getLayoutSize() {
+    public int getLayoutSize() {
         mRadius = computeRadius(Math.abs(mToDegrees - mFromDegrees), getChildCount(),
                 mChildSize, mChildPadding, MIN_RADIUS);
         int layoutPadding = 10;

@@ -19,7 +19,7 @@
 
 ## 2. V2 目标
 
-1. `TermuxActivity` 与 `termux-x11.MainActivity` 从继承改为组合。
+1. `TermuxActivity` 与 X11 runtime 从继承改为组合。
 2. `termux-x11` 对 `:app` 暴露可嵌入 UI 控件，而不是 Activity 基类。
 3. X11 显示器、终端、X11 设置面板保持在同一个 `TermuxActivity`。
 4. X11 server 生命周期归 `TermuxService` 托管，Activity 只 attach/detach 显示面。
@@ -28,21 +28,20 @@
 
 ## 3. 当前主要耦合点
 
-当前强耦合来自：
+当前继承耦合已移除：
 
 ```java
-public class TermuxActivity extends com.termux.x11.MainActivity implements ServiceConnection
+public class TermuxActivity extends AppCompatActivity implements ServiceConnection, X11DisplayHost
 ```
 
-直接后果：
+当前状态：
 
-- `TermuxActivity.onCreate()` 依赖 `super.onCreate()` 先 inflate `termux-x11` 的 `main_activity.xml`。
-- `TermuxActivity` 再 `setContentView(R.layout.activity_termux_main)`，然后把 `lorieContentView` 搬进中间面板。
-- `DisplaySlidingWindow` 依赖 `MainActivity.mLorieViewConnected`。
-- `LorieView` 多处依赖 `MainActivity.getInstance()` / `MainActivity.getPrefs()`。
-- X11 输入、preference、WinHandler、Activity window flags 混在 `MainActivity` 生命周期里。
-
-这些耦合使主 Activity 与 X11 Activity 生命周期不可分离，也增加了后台、旋转、重建时的状态风险。
+- `TermuxActivity` 持有 `LorieViewRuntimeController`，不再继承 `termux-x11` 内的 Activity。
+- `TermuxActivity` 在主布局完成后创建 `TermuxScreenView`，attach 到 `MainSurfaceContainer`，再通过 `LorieViewRuntimeController` public API attach X11 显示。
+- `LorieView` 已去掉 `MainActivity.getInstance()` / `MainActivity.getPrefs()` 静态入口，JNI 回调通过 `LorieViewRuntimeRegistry` 找到当前 runtime。
+- `DisplaySlidingWindow` 已从主布局移除；X11 设置面板移入 `DrawerLayout` 的 `end` drawer。
+- `LoriePreferences` 已降级为 preference 命名空间，`LoriePreferenceFragment` 通过 `LorieViewRuntimeApi.Host` 嵌入 `TermuxActivity`。
+- X11 输入、广播、软键盘控制、WinHandler 生命周期、Activity window flags、preference apply 流程由 `LorieViewRuntimeController` 和专用 controller 承载。
 
 ## 4. 目标结构
 
@@ -52,13 +51,17 @@ public class TermuxActivity extends com.termux.x11.MainActivity implements Servi
 
 | 类/组件 | 所属模块 | 职责 |
 | --- | --- | --- |
-| `X11DisplayView extends FrameLayout` | `:termux-x11` | App 可直接嵌入的 X11 显示控件，内部持有 `LorieView` 和 overlay。 |
-| `X11DisplayController` | `:termux-x11` | attach/detach、connect/reconnect、surface 状态、显示状态。 |
-| `X11DisplayHost` | `:termux-x11` | 由 `TermuxActivity` 实现，向显示层提供 Activity 能力和 app 集成回调。 |
-| `X11ServerConnector` | `:termux-x11` | 处理 `CmdEntryPoint.ACTION_START`、binder、fd、logcat fd。 |
+| `TermuxScreenView extends FrameLayout` | `:termux-x11` | App 可直接嵌入的 X11 显示控件，内部持有 `LorieView` 和 overlay。 |
+| `LorieViewRuntimeApi` | `:termux-x11` | runtime 对 app 和内部组件暴露的 public API / host 接口集合。 |
+| `LorieViewRuntimeController` | `:termux-x11` | 普通 Java 对象，承载 X11 lifecycle、输入、广播、窗口、preference 应用逻辑。 |
+| `LorieViewRuntimeRegistry` | `:termux-x11` | JNI 回调用的弱引用注册表，替代旧 `MainActivity.getInstance()`。 |
+| `LorieViewRuntimeSupport` | `:termux-x11` | package-private runtime helper 集合，包含输入、广播、server connector、软键盘、窗口和 preference controller。 |
 | `X11InputController` | `:termux-x11` | touch/key/mouse/stylus/gamepad 到 X server 的输入桥。 |
-| `X11PreferencePanel` | `:termux-x11` | 封装当前 `LoriePreferenceFragment`，提供 app 内嵌设置页。 |
-| `MainActivity` | `:termux-x11` | 降级为 standalone/debug wrapper，不再作为 `:app` 基类。 |
+| `X11SoftKeyboardController` | `:termux-x11` | 管理 IME 显示、外接键盘状态和 X11 焦点请求。 |
+| `X11WinHandlerController` | `:termux-x11` | 管理 `WinHandler` 创建、线程启动/停止、任务管理弹窗。 |
+| `X11WindowModeController` | `:termux-x11` | 管理 fullscreen、cutout、orientation、keep screen on、system UI flags。 |
+| `X11PreferencesController` | `:termux-x11` | 管理 preference change 分发、延迟应用、输入/窗口/IME/辅助按钮状态刷新。 |
+| `LoriePreferenceFragment` | `:termux-x11` | 可嵌入设置页，当前放在 `DrawerLayout` 的 `end` drawer。 |
 
 `TermuxActivity` 目标继承关系：
 
@@ -68,8 +71,8 @@ public class TermuxActivity extends AppCompatActivity implements ServiceConnecti
 
 集成约束：
 
-- `X11DisplayView` 不直接持有 `TermuxActivity`。
-- Activity 能力通过 `X11DisplayHost` 注入，例如 `getActivity()`、`getFragmentManager()`、`openPreference()`、`requestX11Focus()`。
+- `TermuxScreenView` 不直接持有 `TermuxActivity`。
+- Activity 能力通过 `X11DisplayHost` 注入，例如 `getActivity()`、`getSupportFragmentManager()`、`openPreference()`、`requestX11Focus()`。
 - Activity 生命周期通过 `X11DisplayController.attach(host, view)` / `detach()` 传入。
 - `LorieView` 内部只允许短期从 `Context` 查找 Activity，用于 IME、window token、`runOnUiThread()` 等场景；不得保存 Activity 强引用。
 - `TermuxActivity implements X11DisplayHost`，只负责 app 集成，不进入 X11 内部状态机。
@@ -78,14 +81,14 @@ public class TermuxActivity extends AppCompatActivity implements ServiceConnecti
 
 ## 5. 同 Activity UI 结构
 
-`TermuxActivity` 保持三面板结构，但中间面板不再搬运 `MainActivity` 的 root view。
+`TermuxActivity` 保持三面板结构，但中间面板不再搬运 X11 Activity root view。
 
 目标 UI：
 
 | 区域 | 内容 |
 | --- | --- |
 | 左侧 | 终端、session list、toolbar。 |
-| 中间 | `X11DisplayView`，内部包含 `LorieView`、not connected stub、输入 overlay、X11 EK bar。 |
+| 中间 | `TermuxScreenView`，内部包含 `LorieView`、not connected stub、输入 overlay、X11 EK bar。 |
 | 右侧 | `X11PreferencePanel`。 |
 
 ![同 Activity UI 结构](docs/ArchectureV2/same-activity-ui.svg)
@@ -101,21 +104,21 @@ DrawerLayout
   content:
     MainSurfaceContainer(FrameLayout)
       TerminalView
-      X11DisplayView
+      TermuxScreenView
   start drawer:
     session list
     terminal/display switch control
     existing terminal actions
 ```
 
-不建议用 Fragment 切换 `TerminalView` 和 `X11DisplayView`。这不是导航页，而是两个强状态显示面；`FrameLayout + visibility/controller` 更直接，也能减少 `SurfaceView` 被 fragment transaction 反复销毁重建。
+不建议用 Fragment 切换 `TerminalView` 和 `TermuxScreenView`。这不是导航页，而是两个强状态显示面；`FrameLayout + visibility/controller` 更直接，也能减少 `SurfaceView` 被 fragment transaction 反复销毁重建。
 
 切换规则：
 
-- Terminal mode：`TerminalView` 可见，`X11DisplayView` 隐藏，drawer 边缘手势可按现状启用。
-- Display mode：`X11DisplayView` 可见，`TerminalView` 隐藏或降级后台，X11 获得焦点和输入。
-- 新 display connection 到达时，`X11ServerConnector.onConnected()` 触发 `MainSurfaceController.showDisplay()`。
-- start drawer 内新增明确控件控制 `TerminalView` / `X11DisplayView` 显示状态。
+- Terminal mode：`TerminalView` 可见，`TermuxScreenView` 隐藏，drawer 边缘手势可按现状启用。
+- Display mode：`TermuxScreenView` 可见，`TerminalView` 隐藏或降级后台，X11 获得焦点和输入。
+- 新 display connection 到达时，`X11ServerConnector` 更新 `X11DisplayController` 连接状态，由 `MainSurfaceController.showDisplay()` 切到 display surface。
+- start drawer 内新增明确控件控制 `TerminalView` / `TermuxScreenView` 显示状态。
 
 ## 7. Drawer 手势策略
 
@@ -129,7 +132,7 @@ DrawerLayout 开始拦截事件并拖出 drawer
 ACTION_UP 根据位移和速度决定打开或关闭
 ```
 
-这会和 `X11DisplayView` 的边缘输入冲突，尤其是窗口拖拽、游戏输入、触控板模式、右键模拟、全屏应用边缘操作，以及 Android 10+ 系统返回手势。
+这会和 `TermuxScreenView` 的边缘输入冲突，尤其是窗口拖拽、游戏输入、触控板模式、右键模拟、全屏应用边缘操作，以及 Android 10+ 系统返回手势。
 
 V2 约束：
 
@@ -156,9 +159,9 @@ MainSurfaceController
     -> on closed: restore display lock
 ```
 
-## 8. 当前 DisplaySlidingWindow 解锁语义
+## 8. 旧 DisplaySlidingWindow 解锁语义
 
-当前 `DisplaySlidingWindow` 用两个布尔值控制横向滑动：
+旧 `DisplaySlidingWindow` 曾用两个布尔值控制横向滑动：
 
 | 字段 | 当前含义 |
 | --- | --- |
@@ -186,11 +189,11 @@ releaseSlider(true)
   -> 允许横向滑动窗口重新接管事件
 ```
 
-这个实现不应直接搬到 V2 的 `DrawerLayout` 方案里，但语义可以复用：
+V2 主布局已不再使用 `DisplaySlidingWindow`；保留的是这几个语义：
 
 - 保留“Display mode 默认锁住侧边手势”的策略。
 - 保留 FloatBall / back / 显式按钮作为“临时解锁或打开菜单”的入口。
-- 把 `releaseSlider(true)` 的语义迁移为 `MainSurfaceController.unlockDrawerTemporarily()` 或 `openDrawerExplicitly()`。
+- 把 `releaseSlider(true)` 的语义迁移为显式 drawer lock/unlock 或 `openDrawerExplicitly()`。
 - 不再复用 `HorizontalScrollView` 的 `mLockContentSlider` / `mMenuSwitchSlider` 实现细节。
 
 ## 9. X11 启动与连接
@@ -246,17 +249,25 @@ V2 的变化是：连接状态由 controller/service 管理，Activity 只作为
 
 建议按低风险顺序迁移：
 
-1. 在 `:termux-x11` 中新增 `X11DisplayView`，先复用当前 `main_activity.xml` 的显示区域布局。
-2. 提取 `MainActivity` 中的连接逻辑为 `X11ServerConnector`。
-3. 提取输入逻辑为 `X11InputController`。
-4. 提取显示状态、stub、EK bar、helper buttons 为 `X11DisplayController` 管理。
-5. `TermuxActivity` 改为组合 `X11DisplayView`，移除 `extends MainActivity`。
-6. 将现有 terminal `DrawerLayout` 的 content 改为 `MainSurfaceContainer`，由 controller 切换 `TerminalView` / `X11DisplayView`。
-7. Display mode 下用 `DrawerLayout.setDrawerLockMode(LOCK_MODE_LOCKED_CLOSED)` 锁住边缘拖拽。
-8. `DisplaySlidingWindow` 去掉对 `MainActivity.mLorieViewConnected` 的静态依赖，或在共享容器方案完成后整体下线。
-9. `LorieView` 去掉对 `MainActivity.getInstance()` / `MainActivity.getPrefs()` 的硬依赖，改为通过 `X11DisplayHost` / `PrefsProvider` 获取 Activity 能力和偏好。
-10. 将 X11 session 状态上收到 `TermuxService`，Activity 重建后通过 service 恢复连接。
-11. `MainActivity` 降级为 `:termux-x11` standalone/debug wrapper。
+1. 在 `:termux-x11` 中新增 `TermuxScreenView`，并把 X11 显示区域抽成 `view_x11_display.xml` 供控件和旧 Activity wrapper 共用。已完成。
+2. 提取 `MainActivity` 中的连接逻辑为 `X11ServerConnector`。已完成 binder/fd/logcat/retry 连接层抽离，广播入口已拆到 `X11BroadcastReceiver` / `X11BroadcastRegistrar`。
+3. 提取输入逻辑为 `X11InputController`。已完成 `MainActivity` 到 `TouchInputHandler/InputEventSender` 的封装，`TouchInputHandler` 已改为依赖 `X11InputHost`。
+4. 提取显示状态、stub、EK bar、helper buttons 为 `X11DisplayController` 管理。部分完成，连接状态已进入 controller。
+5. `TermuxActivity` 改为组合 `TermuxScreenView`，移除 `extends MainActivity`。已完成，当前继承 `AppCompatActivity` 并持有 `LorieViewRuntimeController`。
+6. 将现有 terminal `DrawerLayout` 的 content 改为 `MainSurfaceContainer`，由 controller 切换 `TerminalView` / `TermuxScreenView`。已完成。
+7. Display mode 下用 `DrawerLayout.setDrawerLockMode(LOCK_MODE_LOCKED_CLOSED)` 锁住边缘拖拽。已完成 start drawer；X11 设置面板走 end drawer 显式打开。
+8. `DisplaySlidingWindow` 去掉对 `MainActivity.mLorieViewConnected` 的静态依赖，或在共享容器方案完成后整体下线。已从主布局移除。
+9. `LorieView` 去掉对 `MainActivity.getInstance()` / `MainActivity.getPrefs()` 的硬依赖，改为通过 `X11DisplayHost` / `PrefsProvider` 获取 Activity 能力和偏好。静态入口已移除，`LorieView` 已改为依赖 `X11LorieHost`；extra keys、toolbar、win handler、input controls、file picker 已改为宿主接口。
+10. 将软键盘状态从 `MainActivity` static 字段迁移到 `X11SoftKeyboardController`。已完成。
+11. 将 `WinHandler` 生命周期迁移到 `X11WinHandlerController`，窗口 flags 迁移到 `X11WindowModeController`。已完成。
+12. 将 preference change 应用流程迁移到 `X11PreferencesController`。已完成。
+13. 将 app 集成回调从 protected `TermuxActivityListener` 改为公开 `X11ActivityIntegration`，并移除 `TermuxActivity` 对 `inputControlsManager` 字段的直接访问。已完成。
+14. 将 app 侧对 `openPreference()`、`back2PreviousMenu()`、`onPreferencesChanged()`、`setConnected()` 等旧基类方法的直接调用收敛为 X11 runtime API。已完成。
+15. 将 X11 display attach、connection listener 从 protected 初始化/controller 直连收敛为 public runtime API。已完成。
+16. 抽出 `LorieViewRuntimeApi` public 边界，`TermuxActivity` 通过 `getLorieViewRuntime()` 调用 X11 能力；当前返回组合持有的 `LorieViewRuntimeController`。已完成。
+17. 将 X11 preference/runtime 初始化从隐式 Activity 生命周期中拆出为显式初始化方法。已完成。
+18. 将 X11 session 状态上收到 `TermuxService`，Activity 重建后通过 service 恢复连接。
+19. 删除旧 wrapper Activity，JNI 改用 `LorieViewRuntimeRegistry` 回调当前 runtime。已完成。
 
 ![V2 迁移步骤](docs/ArchectureV2/migration-steps.svg)
 
@@ -273,7 +284,7 @@ V2 的变化是：连接状态由 controller/service 管理，Activity 只作为
 - 渲染链路保持 `SurfaceView + EGL/GLES + AHardwareBuffer/fd`。
 - `DisplaySlidingWindow` 不再读取 `MainActivity` 静态连接状态。
 - `LorieView` 不再要求存在 `MainActivity.getInstance()`。
-- `X11DisplayView` 不保存 `TermuxActivity` 强引用；Activity 能力只通过 `X11DisplayHost` 使用。
+- `TermuxScreenView` 不保存 `TermuxActivity` 强引用；Activity 能力只通过 `X11DisplayHost` 使用。
 - Display mode 下 drawer 边缘拖拽默认关闭，只能通过显式入口打开侧栏。
 
 ## 15. 非目标

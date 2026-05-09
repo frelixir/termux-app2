@@ -1,11 +1,11 @@
 package com.termux.x11.controller.winhandler;
 
+import com.termux.x11.LorieViewRuntimeApi;
+
 import android.util.Log;
 import android.view.KeyEvent;
 import android.view.MotionEvent;
 
-
-import com.termux.x11.MainActivity;
 import com.termux.x11.controller.core.StringUtils;
 import com.termux.x11.controller.inputcontrols.ControlsProfile;
 import com.termux.x11.controller.inputcontrols.ExternalController;
@@ -42,11 +42,11 @@ public class WinHandler {
     private final ArrayDeque<byte[]> gamepadStateQueue = new ArrayDeque<>();
     private InetAddress localhost;
     private byte dinputMapperType = DINPUT_MAPPER_TYPE_XINPUT;
-    private final MainActivity activity;
+    private final LorieViewRuntimeApi.WinHandlerHost host;
     private final List<Integer> gamepadClients = new CopyOnWriteArrayList<>();
 
-    public WinHandler(MainActivity activity) {
-        this.activity = activity;
+    public WinHandler(LorieViewRuntimeApi.WinHandlerHost host) {
+        this.host = host;
     }
 
     private boolean sendPacket(int port) {
@@ -95,6 +95,7 @@ public class WinHandler {
             sendPacket(CLIENT_PORT);
         });
     }
+
     public void listProcesses() {
         addAction(() -> {
             sendData.rewind();
@@ -143,7 +144,7 @@ public class WinHandler {
             sendData.putShort((short)dx);
             sendData.putShort((short)dy);
             sendData.putShort((short)wheelDelta);
-            sendData.put((byte)((flags & MouseEventFlags.MOVE) != 0 ? 1 : 0)); // cursor pos feedback
+            sendData.put((byte)((flags & MouseEventFlags.MOVE) != 0 ? 1 : 0));
             sendPacket(CLIENT_PORT);
         });
     }
@@ -249,7 +250,7 @@ public class WinHandler {
             case RequestCodes.GET_GAMEPAD: {
                 boolean isXInput = receiveData.get() == 1;
                 boolean notify = receiveData.get() == 1;
-                final ControlsProfile profile = activity.getInputControlsView().getProfile();
+                final ControlsProfile profile = host.getInputControlsView().getProfile();
                 boolean useVirtualGamepad = profile != null && profile.isVirtualGamepad();
 
                 if (!useVirtualGamepad && (currentController == null || !currentController.isConnected())) {
@@ -282,7 +283,7 @@ public class WinHandler {
             }
             case RequestCodes.GET_GAMEPAD_STATE: {
                 int gamepadId = receiveData.getInt();
-                final ControlsProfile profile = activity.getInputControlsView().getProfile();
+                final ControlsProfile profile = host.getInputControlsView().getProfile();
                 boolean useVirtualGamepad = profile != null && profile.isVirtualGamepad();
                 final boolean enabled = currentController != null || useVirtualGamepad;
 
@@ -311,12 +312,8 @@ public class WinHandler {
                 break;
             }
             case RequestCodes.CURSOR_POS_FEEDBACK: {
-                short x = receiveData.getShort();
-                short y = receiveData.getShort();
-//                XServer xServer = activity.getXServer();
-//                xServer.pointer.setX(x);
-//                xServer.pointer.setY(y);
-//                activity.getXServerView().requestRender();
+                receiveData.getShort();
+                receiveData.getShort();
                 break;
             }
         }
@@ -357,7 +354,7 @@ public class WinHandler {
     public void sendGamepadState() {
         Log.d("sendGamepadState","port:"+initReceived);
         if (!initReceived || gamepadClients.isEmpty()) return;
-        final ControlsProfile profile = activity.getInputControlsView().getProfile();
+        final ControlsProfile profile = host.getInputControlsView().getProfile();
         final boolean useVirtualGamepad = profile != null && profile.isVirtualGamepad();
         final boolean enabled = currentController != null || useVirtualGamepad;
 
@@ -388,12 +385,14 @@ public class WinHandler {
         }
         return handled;
     }
+
     public void saveGamepadState(GamepadState state) {
         synchronized (gamepadStateQueue) {
             if (gamepadStateQueue.size() > 20) gamepadStateQueue.removeLast();
             gamepadStateQueue.add(state.toByteArray());
         }
     }
+
     public boolean onKeyEvent(KeyEvent event) {
         boolean handled = false;
         if (currentController != null && currentController.getDeviceId() == event.getDeviceId() && event.getRepeatCount() == 0) {

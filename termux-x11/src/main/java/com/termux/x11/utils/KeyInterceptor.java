@@ -1,5 +1,7 @@
 package com.termux.x11.utils;
 
+import com.termux.x11.LorieViewRuntimeApi;
+
 import android.accessibilityservice.AccessibilityService;
 import android.accessibilityservice.AccessibilityServiceInfo;
 import android.content.Context;
@@ -12,8 +14,9 @@ import android.view.accessibility.AccessibilityEvent;
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AlertDialog;
 
-import com.termux.x11.MainActivity;
+import com.termux.x11.Prefs;
 
+import java.lang.ref.WeakReference;
 import java.util.LinkedHashSet;
 
 public class KeyInterceptor extends AccessibilityService {
@@ -21,11 +24,21 @@ public class KeyInterceptor extends AccessibilityService {
 
     private static final Handler handler = new Handler(Looper.getMainLooper());
     private static KeyInterceptor self;
+    private static WeakReference<LorieViewRuntimeApi.LorieHost> activity = new WeakReference<>(null);
     private static boolean launchedAutomatically = false;
     private boolean enabled = false;
 
     public KeyInterceptor() {
         self = this;
+    }
+
+    public static void setActivity(LorieViewRuntimeApi.LorieHost keyEventTarget) {
+        activity = new WeakReference<>(keyEventTarget);
+    }
+
+    public static void clearActivity(LorieViewRuntimeApi.LorieHost keyEventTarget) {
+        if (activity.get() == keyEventTarget)
+            activity.clear();
     }
 
     public static void launch(@NonNull Context ctx) {
@@ -43,7 +56,7 @@ public class KeyInterceptor extends AccessibilityService {
                 .create()
                 .show();
 
-            MainActivity.prefs.enableAccessibilityServiceAutomatically.put(false);
+            new Prefs(ctx).enableAccessibilityServiceAutomatically.put(false);
         }
     }
 
@@ -74,7 +87,7 @@ public class KeyInterceptor extends AccessibilityService {
     }
 
     public static void recheck() {
-        MainActivity a = MainActivity.getInstance();
+        LorieViewRuntimeApi.LorieHost a = activity.get();
         boolean shouldBeEnabled = (a != null && self != null) && (a.hasWindowFocus() || !self.pressedKeys.isEmpty());
         if (self != null && shouldBeEnabled != self.enabled) {
             if (shouldBeEnabled) {
@@ -92,7 +105,7 @@ public class KeyInterceptor extends AccessibilityService {
     @Override
     public boolean onKeyEvent(KeyEvent event) {
         boolean ret = false;
-        MainActivity instance = MainActivity.getInstance();
+        LorieViewRuntimeApi.LorieHost instance = activity.get();
 
         if (instance == null)
             return false;

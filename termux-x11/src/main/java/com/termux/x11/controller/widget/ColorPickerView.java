@@ -19,8 +19,8 @@ import android.widget.PopupWindow;
 
 import androidx.annotation.Nullable;
 
-import com.termux.x11.MainActivity;
 import com.termux.x11.R;
+import com.termux.x11.LoriePreferences;
 import com.termux.x11.controller.ControlsEditorActivity;
 import com.termux.x11.controller.core.AppUtils;
 import com.termux.x11.controller.core.UnitUtils;
@@ -54,7 +54,7 @@ public class ColorPickerView extends View implements View.OnClickListener {
         for (int i = 0; i < n; i++) {
             int attr = typedArray.getIndex(i);
             if (attr == R.styleable.ImagePickerView_activityTypeCode) {
-                activityType = (int) typedArray.getInt(attr, MainActivity.OPEN_FILE_REQUEST_CODE);
+                activityType = (int) typedArray.getInt(attr, LoriePreferences.OPEN_FILE_REQUEST_CODE);
                 break;
             }
         }
@@ -114,40 +114,7 @@ public class ColorPickerView extends View implements View.OnClickListener {
 
     @Override
     public void onClick(View anchor) {
-        if (activityType == getResources().getInteger(R.integer.load_button_icon_code)) {
-            setButtonColor(anchor);
-        } else {
-            setWineWallPaperColor(anchor);
-        }
-    }
-
-    public void setWineWallPaperColor(View anchor) {
-        Context context = getContext();
-        final int popupHeight = 60;
-        LinearLayout container = new LinearLayout(context);
-        container.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, (int) UnitUtils.dpToPx(popupHeight)));
-        container.setOrientation(LinearLayout.HORIZONTAL);
-        container.setGravity(Gravity.CENTER_VERTICAL);
-        container.setPadding(0, 0, (int) UnitUtils.dpToPx(4), 0);
-
-        Bitmap colorFrameSelected = BitmapFactory.decodeResource(context.getResources(), R.drawable.color_frame_selected);
-        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams((int) UnitUtils.dpToPx(32), (int) UnitUtils.dpToPx(32));
-        params.setMargins((int) UnitUtils.dpToPx(4), 0, 0, 0);
-        final PopupWindow[] popupWindow = {null};
-
-        for (final int color : colors) {
-            ImageView imageView = new ImageView(context);
-            imageView.setLayoutParams(params);
-            imageView.setImageBitmap(color == currentColor ? colorFrameSelected : colorFrame);
-            imageView.setBackgroundColor(toARGB(color));
-            imageView.setOnClickListener((v) -> {
-                currentColor = color;
-                invalidate();
-                if (popupWindow[0] != null) popupWindow[0].dismiss();
-            });
-            container.addView(imageView);
-        }
-        popupWindow[0] = AppUtils.showPopupWindow(anchor, container, 0, popupHeight);
+        setButtonColor(anchor);
     }
 
     public void setButtonColor(View anchor) {

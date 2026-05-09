@@ -23,17 +23,23 @@
             android:layout_above="@+id/terminal_toolbar_view_pager"
             android:layout_alignParentTop="true">
 
-            <com.termux.view.TerminalView
-                android:id="@+id/terminal_view"
+            <FrameLayout
+                android:id="@+id/main_surface_container"
                 android:layout_width="match_parent"
-                android:layout_height="match_parent"
-                android:autofillHints="password"
-                android:defaultFocusHighlightEnabled="false"
-                android:focusableInTouchMode="true"
-                android:importantForAutofill="no"
-                android:scrollbarThumbVertical="@drawable/terminal_scroll_shape"
-                android:scrollbars="vertical"
-                tools:ignore="UnusedAttribute" />
+                android:layout_height="match_parent">
+
+                <com.termux.view.TerminalView
+                    android:id="@+id/terminal_view"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:autofillHints="password"
+                    android:defaultFocusHighlightEnabled="false"
+                    android:focusableInTouchMode="true"
+                    android:importantForAutofill="no"
+                    android:scrollbarThumbVertical="@drawable/terminal_scroll_shape"
+                    android:scrollbars="vertical"
+                    tools:ignore="UnusedAttribute" />
+            </FrameLayout>
 
             <LinearLayout
                 android:id="@+id/left_drawer"
@@ -80,6 +86,29 @@
                         app:tint="?attr/termuxActivityDrawerImageTint" />
                 </LinearLayout>
 
+                <LinearLayout
+                    style="?android:attr/buttonBarStyle"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal">
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/show_terminal_button"
+                        style="?android:attr/buttonBarButtonStyle"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="@string/action_show_terminal" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/show_display_button"
+                        style="?android:attr/buttonBarButtonStyle"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="@string/action_show_display" />
+                </LinearLayout>
+
                 <ListView
                     android:id="@+id/terminal_sessions_list"
                     android:layout_width="match_parent"
@@ -120,6 +149,12 @@
                         android:text="@string/action_new_session" />
                 </LinearLayout>
             </LinearLayout>
+
+            <include
+                layout="@layout/window_preference"
+                android:layout_width="320dp"
+                android:layout_height="match_parent"
+                android:layout_gravity="end" />
 
         </androidx.drawerlayout.widget.DrawerLayout>
 

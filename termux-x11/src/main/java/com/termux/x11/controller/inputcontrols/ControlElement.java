@@ -289,6 +289,10 @@ public class ControlElement {
         return boundingBox;
     }
 
+    public void invalidateGeometry() {
+        boundingBoxNeedsUpdate = true;
+    }
+
     private Rect computeBoundingBox() {
         int snappingSize = inputControlsView.getSnappingSize();
         int halfWidth = 0;
@@ -747,7 +751,7 @@ public class ControlElement {
 
             if (type == Type.TRACKPAD) {
                 if (currentPosition == null) currentPosition = new PointF();
-                float[] deltaPoint = inputControlsView.getTouchpadView().computeDeltaPoint(currentPosition.x, currentPosition.y, x, y);
+                float[] deltaPoint = inputControlsView.computeTouchpadDeltaPoint(currentPosition.x, currentPosition.y, x, y);
                 deltaX = deltaPoint[0];
                 deltaY = deltaPoint[1];
                 currentPosition.set(x, y);

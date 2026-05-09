@@ -1,5 +1,7 @@
 package com.termux.x11.controller;
 
+import com.termux.x11.LorieViewRuntimeApi;
+
 import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
@@ -28,8 +30,8 @@ import androidx.core.content.ContextCompat;
 import androidx.core.widget.ImageViewCompat;
 import androidx.fragment.app.Fragment;
 
-import com.termux.x11.MainActivity;
 import com.termux.x11.R;
+import com.termux.x11.LoriePreferences;
 import com.termux.x11.controller.contentdialog.ContentDialog;
 import com.termux.x11.controller.core.AppUtils;
 import com.termux.x11.controller.core.Callback;
@@ -78,7 +80,7 @@ public class InputControlsFragment extends Fragment {
 
     @Override
     public void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
-        if (requestCode == MainActivity.OPEN_FILE_REQUEST_CODE && resultCode == Activity.RESULT_OK) {
+        if (requestCode == LoriePreferences.OPEN_FILE_REQUEST_CODE && resultCode == Activity.RESULT_OK) {
             try {
                 ControlsProfile importedProfile = manager.importProfile(new JSONObject(FileUtils.readString(getContext(), data.getData())));
                 if (importProfileCallback != null) importProfileCallback.call(importedProfile);
@@ -241,12 +243,12 @@ public class InputControlsFragment extends Fragment {
         Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
         intent.addCategory(Intent.CATEGORY_OPENABLE);
         intent.setType("*/*");
-        getActivity().startActivityFromFragment(this, intent, MainActivity.OPEN_FILE_REQUEST_CODE);
+        getActivity().startActivityFromFragment(this, intent, LoriePreferences.OPEN_FILE_REQUEST_CODE);
     }
 
     private void downloadSelectedProfiles(final Spinner sProfile, String[] items, final ArrayList<Integer> positions) {
-        final MainActivity activity = (MainActivity)getActivity();
-        activity.getPreloaderDialog().show(R.string.downloading_file);
+        final LorieViewRuntimeApi.InputControlsHost host = getInputControlsHost();
+        host.getPreloaderDialog().show(R.string.downloading_file);
         currentProfile = null;
         final AtomicInteger processedItemCount = new AtomicInteger();
 
@@ -257,8 +259,8 @@ public class InputControlsFragment extends Fragment {
                 }
                 catch (JSONException e) {}
                 if (processedItemCount.incrementAndGet() == positions.size()) {
-                    activity.runOnUiThread(() -> {
-                        activity.getPreloaderDialog().close();
+                    host.getActivity().runOnUiThread(() -> {
+                        host.getPreloaderDialog().close();
                         loadProfileSpinner(sProfile);
                         updateLayout.run();
                     });
@@ -268,10 +270,11 @@ public class InputControlsFragment extends Fragment {
     }
 
     private void downloadProfileList(final Spinner sProfile) {
-        final MainActivity activity = (MainActivity)getActivity();
-        activity.getPreloaderDialog().show(R.string.loading);
+        final LorieViewRuntimeApi.InputControlsHost host = getInputControlsHost();
+        final Activity activity = host.getActivity();
+        host.getPreloaderDialog().show(R.string.loading);
         HttpUtils.download(String.format(INPUT_CONTROLS_URL, "index.txt"), (content) -> activity.runOnUiThread(() -> {
-            activity.getPreloaderDialog().close();
+            host.getPreloaderDialog().close();
             if (content != null) {
                 final String[] items = content.split("\n");
                 ContentDialog.showMultipleChoiceList(activity, R.string.import_profile, items, (positions) -> {
@@ -282,6 +285,13 @@ public class InputControlsFragment extends Fragment {
             }
             else AppUtils.showToast(activity, R.string.unable_to_load_profile_list);
         }));
+    }
+
+    private LorieViewRuntimeApi.InputControlsHost getInputControlsHost() {
+        Activity activity = getActivity();
+        if (activity instanceof LorieViewRuntimeApi.InputControlsHost)
+            return (LorieViewRuntimeApi.InputControlsHost) activity;
+        throw new IllegalStateException("InputControlsFragment requires an LorieViewRuntimeApi.InputControlsHost");
     }
 
     @Override

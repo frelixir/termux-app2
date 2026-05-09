@@ -9,7 +9,6 @@ import android.view.ViewGroup;
 import android.view.ViewTreeObserver;
 import android.view.WindowInsets;
 import android.view.inputmethod.EditorInfo;
-import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 
 import androidx.annotation.Nullable;
@@ -131,9 +130,7 @@ public class TermuxActivityRootView extends LinearLayout implements ViewTreeObse
         if (root_view_logging_enabled)
             Logger.logVerbose(LOG_TAG, ":\nonGlobalLayout:");
 
-//        android.view.ViewGroup.LayoutParams layoutParams = getLayoutParams();
-//        FrameLayout.LayoutParams params = (FrameLayout.LayoutParams) getLayoutParams();
-        LinearLayout.LayoutParams params = (LinearLayout.LayoutParams) getLayoutParams();
+        ViewGroup.MarginLayoutParams params = (ViewGroup.MarginLayoutParams) getLayoutParams();
 
         // Get the position Rects of the bottom space view and the main window holding it
         Rect[] windowAndViewRects = ViewUtils.getWindowAndViewRects(bottomSpaceView, mStatusBarHeight);

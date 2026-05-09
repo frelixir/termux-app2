@@ -23,12 +23,12 @@ import android.widget.PopupWindow;
 import androidx.annotation.Nullable;
 
 import com.termux.x11.R;
+import com.termux.x11.LoriePreferences;
 import com.termux.x11.controller.ControlsEditorActivity;
 import com.termux.x11.controller.core.AppUtils;
 import com.termux.x11.controller.core.FileUtils;
 import com.termux.x11.controller.core.ImageUtils;
 import com.termux.x11.controller.core.UnitUtils;
-import com.termux.x11.controller.core.WineThemeManager;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -36,8 +36,6 @@ import java.io.FilenameFilter;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.Arrays;
-
-import com.termux.x11.MainActivity;
 
 public class ImagePickerView extends View implements View.OnClickListener {
     private final Bitmap icon;
@@ -72,7 +70,7 @@ public class ImagePickerView extends View implements View.OnClickListener {
         for (int i = 0; i < n; i++) {
             int attr = typedArray.getIndex(i);
             if (attr == R.styleable.ImagePickerView_activityTypeCode) {
-                activityType = (int) typedArray.getInt(attr, MainActivity.OPEN_FILE_REQUEST_CODE);
+                activityType = (int) typedArray.getInt(attr, LoriePreferences.OPEN_FILE_REQUEST_CODE);
                 break;
             }
         }
@@ -110,12 +108,8 @@ public class ImagePickerView extends View implements View.OnClickListener {
 
     @Override
     public void onClick(View anchor) {
-        if (activityType == getResources().getInteger(R.integer.load_button_icon_code)) {
-            setButtonIcon(anchor);
-            createButtonImageList(anchor);
-        } else {
-            setWineWallPaper(anchor);
-        }
+        setButtonIcon(anchor);
+        createButtonImageList(anchor);
     }
 
     private void setButtonIcon(View anchor) {
@@ -162,45 +156,6 @@ public class ImagePickerView extends View implements View.OnClickListener {
                 if (delTag) {
                     FileUtils.delete(buttonIconFile);
                 }
-            });
-        }
-
-        popupWindow[0] = AppUtils.showPopupWindow(anchor, view, 200, 240);
-    }
-
-    private void setWineWallPaper(View anchor) {
-        final Context context = getContext();
-        final File userWallpaperFile = WineThemeManager.getUserWallpaperFile(context);
-
-        View view = LayoutInflater.from(context).inflate(R.layout.image_picker_view, null);
-        ImageView imageView = view.findViewById(R.id.ImageView);
-
-        if (userWallpaperFile.isFile()) {
-            imageView.setImageBitmap(BitmapFactory.decodeFile(userWallpaperFile.getPath()));
-        } else imageView.setImageResource(R.drawable.wallpaper);
-
-        final PopupWindow[] popupWindow = {null};
-        View browseButton = view.findViewById(R.id.BTBrowse);
-        browseButton.setOnClickListener((v) -> {
-            MainActivity activity = (MainActivity) context;
-            Intent intent = new Intent(Intent.ACTION_PICK);
-            intent.setType("image/*");
-            activity.setOpenFileCallback((data) -> {
-                Bitmap bitmap = ImageUtils.getBitmapFromUri(context, data, 1280);
-                if (bitmap == null) return;
-
-                ImageUtils.save(bitmap, userWallpaperFile, Bitmap.CompressFormat.PNG, 100);
-                popupWindow[0].dismiss();
-            });
-            activity.startActivityForResult(intent, activityType);
-        });
-
-        View removeButton = view.findViewById(R.id.BTRemove);
-        if (userWallpaperFile.isFile()) {
-            removeButton.setVisibility(View.VISIBLE);
-            removeButton.setOnClickListener((v) -> {
-                FileUtils.delete(userWallpaperFile);
-                popupWindow[0].dismiss();
             });
         }
 
