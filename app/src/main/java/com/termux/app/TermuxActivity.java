@@ -374,13 +374,24 @@ public class TermuxActivity extends AppCompatActivity implements ServiceConnecti
     }
 
     public void showTerminalSurface() {
-        if (mMainSurfaceController != null)
+        if (mMainSurfaceController != null) {
             mMainSurfaceController.showTerminal();
+            updateTerminalToolbarVisibilityForSurface();
+        }
     }
 
     public void showDisplaySurface() {
-        if (mMainSurfaceController != null)
+        if (mMainSurfaceController != null) {
             mMainSurfaceController.showDisplay();
+            if (mMainSurfaceController.isDisplayMode()) {
+                getLorieViewRuntime().refreshX11TerminalToolbar();
+                updateTerminalToolbarVisibilityForSurface();
+            }
+        }
+    }
+
+    private boolean isDisplaySurfaceMode() {
+        return mMainSurfaceController != null && mMainSurfaceController.isDisplayMode();
     }
 
     @SuppressLint("ResourceType")
@@ -440,6 +451,8 @@ public class TermuxActivity extends AppCompatActivity implements ServiceConnecti
         setTerminalToolbarView(savedInstanceState);
 
         setSettingsButtonView();
+
+        setX11PreferenceBackButtonView();
 
         setNewSessionButtonView();
 
@@ -979,8 +992,6 @@ public class TermuxActivity extends AppCompatActivity implements ServiceConnecti
             mTermuxTerminalViewClient, mTermuxTerminalSessionActivityClient);
 
         final ViewPager terminalToolbarViewPager = getTerminalToolbarViewPager();
-        if (mPreferences.shouldShowTerminalToolbar())
-            terminalToolbarViewPager.setVisibility(View.VISIBLE);
         ViewGroup.LayoutParams layoutParams = terminalToolbarViewPager.getLayoutParams();
         mTerminalToolbarDefaultHeight = layoutParams.height;
 
@@ -992,6 +1003,14 @@ public class TermuxActivity extends AppCompatActivity implements ServiceConnecti
 
         terminalToolbarViewPager.setAdapter(new TerminalToolbarViewPager.PageAdapter(this, savedTextInput));
         terminalToolbarViewPager.addOnPageChangeListener(new TerminalToolbarViewPager.OnPageChangeListener(this, terminalToolbarViewPager));
+        updateTerminalToolbarVisibilityForSurface();
+    }
+
+    private void updateTerminalToolbarVisibilityForSurface() {
+        final ViewPager terminalToolbarViewPager = getTerminalToolbarViewPager();
+        if (terminalToolbarViewPager == null) return;
+
+        terminalToolbarViewPager.setVisibility(!isDisplaySurfaceMode() && mPreferences.shouldShowTerminalToolbar() ? View.VISIBLE : View.GONE);
     }
 
     private void setTerminalToolbarHeight() {
@@ -1006,6 +1025,11 @@ public class TermuxActivity extends AppCompatActivity implements ServiceConnecti
     }
 
     public void toggleTerminalToolbar() {
+        if (isDisplaySurfaceMode()) {
+            getLorieViewRuntime().toggleExtraKeys();
+            return;
+        }
+
         final ViewPager terminalToolbarViewPager = getTerminalToolbarViewPager();
         if (terminalToolbarViewPager == null) return;
         final boolean showNow = mPreferences.toogleShowTerminalToolbar();
@@ -1034,6 +1058,20 @@ public class TermuxActivity extends AppCompatActivity implements ServiceConnecti
         settingsButton.setOnClickListener(v -> {
             ActivityUtils.startActivity(this, new Intent(this, SettingsActivity.class));
         });
+    }
+
+    private void setX11PreferenceBackButtonView() {
+        findViewById(R.id.x11_preference_back_button).setOnClickListener(v -> {
+            navigateX11PreferencesBack();
+        });
+    }
+
+    private void navigateX11PreferencesBack() {
+        if (getSupportFragmentManager().getBackStackEntryCount() > 1) {
+            getSupportFragmentManager().popBackStack();
+        } else {
+            openX11Preferences(false);
+        }
     }
 
     private void setNewSessionButtonView() {
@@ -1075,8 +1113,10 @@ public class TermuxActivity extends AppCompatActivity implements ServiceConnecti
     @SuppressLint({"RtlHardcoded", "MissingSuperCall"})
     @Override
     public void onBackPressed() {
-        if (getDrawer().isDrawerOpen(Gravity.LEFT)) {
+        if (getDrawer().isDrawerOpen(GravityCompat.START)) {
             getDrawer().closeDrawers();
+        } else if (getDrawer().isDrawerOpen(GravityCompat.END)) {
+            navigateX11PreferencesBack();
         } else {
 //            finishActivityIfNotFinishing();
             if (!getLorieViewRuntime().isX11FloatBallMenuEnabled() || mFloatBallMenuClient == null) {

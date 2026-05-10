@@ -15,7 +15,7 @@
   ~ limitations under the License.
   -->
 
-<!-- Based on Android Support library code, only added Divider view and onClick action here -->
+<!-- Based on Android Support library code, only added Divider view here -->
 
 <LinearLayout
     xmlns:android="http://schemas.android.com/apk/res/android"
@@ -23,8 +23,8 @@
     android:layout_height="wrap_content"
     android:minHeight="?android:attr/listPreferredItemHeightSmall"
     android:gravity="center_vertical"
-    android:paddingLeft="?android:attr/listPreferredItemPaddingLeft"
-    android:paddingStart="?android:attr/listPreferredItemPaddingStart"
+    android:paddingLeft="4dp"
+    android:paddingStart="4dp"
     android:paddingRight="?android:attr/listPreferredItemPaddingRight"
     android:paddingEnd="?android:attr/listPreferredItemPaddingEnd"
     android:background="@android:color/transparent"
@@ -39,7 +39,6 @@
         android:layout_weight="1"
         android:paddingTop="16dp"
         android:paddingBottom="16dp"
-        android:onClick="onClick"
         android:background="?android:attr/selectableItemBackground">
 
         <TextView
@@ -103,8 +102,8 @@
         android:layout_width="wrap_content"
         android:layout_height="match_parent"
         android:gravity="end|center_vertical"
-        android:paddingLeft="16dp"
-        android:paddingStart="16dp"
+        android:paddingLeft="8dp"
+        android:paddingStart="8dp"
         android:paddingRight="0dp"
         android:paddingEnd="0dp"
         android:orientation="vertical"

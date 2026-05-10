@@ -38,6 +38,7 @@
     <string name="action_toggle_tool_box">ToolBox</string>
     <string name="action_show_terminal">Terminal</string>
     <string name="action_show_display">Display</string>
+    <string name="action_x11_preferences_back">Back</string>
 
     <string name="msg_enabling_terminal_toolbar">Enabling Terminal Toolbar</string>
     <string name="msg_disabling_terminal_toolbar">Disabling Terminal Toolbar</string>

@@ -789,20 +789,20 @@ public final class LorieViewRuntimeController implements LorieViewRuntimeApi.Lor
 
     private void setTerminalToolbarView() {
         final ViewPager pager = getDisplayTerminalToolbarViewPager();
-        ViewGroup parent = (ViewGroup) pager.getParent();
 
         boolean showNow = LorieView.connected() && prefs.showAdditionalKbd.get() && prefs.additionalKbdVisible.get();
 
-        pager.setVisibility(showNow ? VISIBLE : View.INVISIBLE);
+        pager.clearOnPageChangeListeners();
+
+        pager.setAlpha(isInPictureInPictureMode ? 0.f : ((float) prefs.opacityEKBar.get()) / 100);
+        pager.setVisibility(showNow ? VISIBLE : View.GONE);
 
         if (showNow) {
             pager.setAdapter(new X11ToolbarViewPager.PageAdapter(this, (v, k, e) -> mX11InputController.sendKeyEvent(e)));
-            pager.clearOnPageChangeListeners();
             pager.addOnPageChangeListener(new X11ToolbarViewPager.OnPageChangeListener(this, pager));
             pager.bringToFront();
         } else {
-            parent.removeView(pager);
-            parent.addView(pager, 0);
+            pager.setAdapter(null);
             if (mExtraKeys != null)
                 mExtraKeys.unsetSpecialKeys();
         }

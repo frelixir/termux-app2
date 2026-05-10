@@ -59,8 +59,10 @@ import androidx.preference.Preference;
 import androidx.preference.Preference.OnPreferenceChangeListener;
 import androidx.preference.PreferenceDataStore;
 import androidx.preference.PreferenceFragmentCompat;
+import androidx.preference.PreferenceGroup;
 import androidx.preference.PreferenceScreen;
 import androidx.preference.SeekBarPreference;
+import androidx.recyclerview.widget.RecyclerView;
 
 import com.termux.x11.controller.InputControllerActivity;
 import com.termux.x11.controller.contentdialog.ContentDialog;
@@ -119,6 +121,7 @@ public final class LoriePreferences {
         }
 
         final String root;
+        private boolean showAdditionalKeyboardSettingsButtonBound;
 
         /**
          * @noinspection unused
@@ -142,6 +145,13 @@ public final class LoriePreferences {
             }
         }
 
+        @Override
+        public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
+            super.onViewCreated(view, savedInstanceState);
+            compactPreferenceListPadding();
+            bindShowAdditionalKeyboardSettingsButton();
+        }
+
         private LorieViewRuntimeApi.Host getPreferenceHost() {
             if (requireActivity() instanceof LorieViewRuntimeApi.Host)
                 return (LorieViewRuntimeApi.Host) requireActivity();
@@ -155,6 +165,28 @@ public final class LoriePreferences {
             Preference p = findPreference(key);
             if (p != null)
                 action.accept(p);
+        }
+
+        private int dp(float value) {
+            return Math.round(TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, value, getResources().getDisplayMetrics()));
+        }
+
+        private void compactPreferenceListPadding() {
+            RecyclerView listView = getListView();
+            int horizontalPadding = dp(4);
+            listView.setPadding(horizontalPadding, listView.getPaddingTop(), horizontalPadding, listView.getPaddingBottom());
+        }
+
+        private void compactPreferenceInsets(@Nullable Preference preference) {
+            if (preference == null)
+                return;
+
+            preference.setIconSpaceReserved(false);
+            if (preference instanceof PreferenceGroup) {
+                PreferenceGroup group = (PreferenceGroup) preference;
+                for (int i = 0; i < group.getPreferenceCount(); i++)
+                    compactPreferenceInsets(group.getPreference(i));
+            }
         }
 
         @SuppressLint("DiscouragedApi")
@@ -175,6 +207,7 @@ public final class LoriePreferences {
                 prefs.touchMode.put("1");
 
             setPreferencesFromResource(R.xml.preferences, root == null ? "main" : root);
+            compactPreferenceInsets(getPreferenceScreen());
 
             int id;
             PreferenceScreen screen = getPreferenceScreen();
@@ -225,6 +258,54 @@ public final class LoriePreferences {
             setNoActionOptionText(findPreference("volumeDownAction"), "android volume control");
             setNoActionOptionText(findPreference("volumeUpAction"), "android volume control");
             setNoActionOptionText(findPreference("mediaKeysAction"), "android media control");
+        }
+
+        private void bindShowAdditionalKeyboardSettingsButton() {
+            if (showAdditionalKeyboardSettingsButtonBound || !"kbd".equals(root))
+                return;
+
+            showAdditionalKeyboardSettingsButtonBound = true;
+            RecyclerView listView = getListView();
+            RecyclerView.OnChildAttachStateChangeListener listener = new RecyclerView.OnChildAttachStateChangeListener() {
+                @Override
+                public void onChildViewAttachedToWindow(@NonNull View view) {
+                    bindShowAdditionalKeyboardSettingsButton(view);
+                }
+
+                @Override
+                public void onChildViewDetachedFromWindow(@NonNull View view) {
+                }
+            };
+            listView.addOnChildAttachStateChangeListener(listener);
+            listView.post(() -> {
+                for (int i = 0; i < listView.getChildCount(); i++) {
+                    bindShowAdditionalKeyboardSettingsButton(listView.getChildAt(i));
+                }
+            });
+        }
+
+        private void bindShowAdditionalKeyboardSettingsButton(@NonNull View preferenceView) {
+            View settingsButton = preferenceView.findViewById(R.id.button);
+            if (settingsButton == null)
+                return;
+
+            settingsButton.setClickable(true);
+            settingsButton.setFocusable(true);
+            settingsButton.setOnClickListener(v -> showFragment("ekbar"));
+        }
+
+        private void showFragment(@Nullable String root) {
+            View view = getView();
+            View parent = view != null && view.getParent() instanceof View ? (View) view.getParent() : null;
+            if (parent == null || parent.getId() == View.NO_ID)
+                return;
+
+            LoriePreferenceFragment fragment = new LoriePreferenceFragment(root);
+            fragment.setTargetFragment(this, 0);
+            getParentFragmentManager().beginTransaction()
+                .replace(parent.getId(), fragment)
+                .addToBackStack(null)
+                .commit();
         }
 
         private void setTitle(CharSequence key, int resId) {
