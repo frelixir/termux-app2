@@ -25,7 +25,8 @@
 #include "lorie.h"
 
 #define MAX_WAITING_CONNECT_CLIENTS 5
-#define SOCKET_PATH "/data/data/com.termux/files/usr/tmp/wayland-0"
+#define SOCKET_DIR "/data/data/com.termux/files/home/tmp"
+#define SOCKET_PATH SOCKET_DIR "/wayland-0"
 #define log(prio, ...) __android_log_print(ANDROID_LOG_ ## prio, "LorieNative", __VA_ARGS__)
 #define min(a, b) (((a) < (b)) ? (a) : (b))
 extern int conn_fd;
@@ -257,9 +258,14 @@ static void startRenderServer(JavaVM *vm) {
     }
 
     // 确保目录存在
-    char socket_dir[] = "/data/data/com.termux/files/usr/tmp";
-    if (access(socket_dir, F_OK) != 0) {
-        if (mkdir(socket_dir, 0755) != 0) {
+    char socket_parent_dir[] = "/data/data/com.termux/files/home";
+    if (access(socket_parent_dir, F_OK) != 0) {
+        if (mkdir(socket_parent_dir, 0700) != 0 && errno != EEXIST) {
+            log(ERROR, "Failed to create socket parent directory: %s", strerror(errno));
+        }
+    }
+    if (access(SOCKET_DIR, F_OK) != 0) {
+        if (mkdir(SOCKET_DIR, 0700) != 0 && errno != EEXIST) {
             log(ERROR, "Failed to create socket directory: %s", strerror(errno));
         }
     }

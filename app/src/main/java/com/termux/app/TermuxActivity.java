@@ -349,6 +349,11 @@ public class TermuxActivity extends AppCompatActivity implements ServiceConnecti
         return mMainSurfaceController;
     }
 
+    private void updateTerminalX11PreferencesDrawerAvailability() {
+        if (mMainSurfaceController != null)
+            mMainSurfaceController.setTerminalEndDrawerEnabled(!getLorieViewRuntime().isX11FloatBallMenuEnabled());
+    }
+
     public void setTerminalCopyMode(boolean copyMode) {
         if (mMainSurfaceController != null)
             mMainSurfaceController.setTerminalCopyMode(copyMode);
@@ -629,6 +634,7 @@ public class TermuxActivity extends AppCompatActivity implements ServiceConnecti
                         mFloatBallMenuClient.onCreate();
                     }
                 }
+                updateTerminalX11PreferencesDrawerAvailability();
             }
 
             @Override
@@ -641,6 +647,7 @@ public class TermuxActivity extends AppCompatActivity implements ServiceConnecti
     private void setFloatBallMenuClient() {
         SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(this);
         getLorieViewRuntime().setX11FloatBallMenuEnabled(preferences.getBoolean("enableFloatBallMenu", false));
+        updateTerminalX11PreferencesDrawerAvailability();
         if (getLorieViewRuntime().isX11FloatBallMenuEnabled()) {
             mFloatBallMenuClient = new FloatBallMenuClient(this);
             mFloatBallMenuClient.onCreate();

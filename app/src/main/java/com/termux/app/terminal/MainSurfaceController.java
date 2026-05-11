@@ -37,6 +37,7 @@ public final class MainSurfaceController {
     @NonNull
     private SurfaceMode mMode = SurfaceMode.TERMINAL;
     private boolean mTerminalCopyMode;
+    private boolean mTerminalEndDrawerEnabled;
     private int mTrackingInternalDrawerGravity;
     private float mInternalDrawerSwipeDownX;
     private float mInternalDrawerSwipeDownY;
@@ -118,6 +119,15 @@ public final class MainSurfaceController {
         applyDrawerLockMode();
     }
 
+    public void setTerminalEndDrawerEnabled(boolean enabled) {
+        if (mTerminalEndDrawerEnabled == enabled)
+            return;
+        mTerminalEndDrawerEnabled = enabled;
+        if (!enabled && mMode == SurfaceMode.TERMINAL && mDrawerLayout.isDrawerOpen(GravityCompat.END))
+            mDrawerLayout.closeDrawer(GravityCompat.END);
+        applyDrawerLockMode();
+    }
+
     public void openStartDrawerExplicitly() {
         mDrawerLayout.setDrawerLockMode(DrawerLayout.LOCK_MODE_UNLOCKED, GravityCompat.START);
         ensureRestoreLockModeOnCloseListener();
@@ -192,7 +202,7 @@ public final class MainSurfaceController {
         if (drawerGravity == GravityCompat.START)
             return mMode == SurfaceMode.TERMINAL;
         if (drawerGravity == GravityCompat.END)
-            return mMode == SurfaceMode.DISPLAY;
+            return mMode == SurfaceMode.DISPLAY || (mMode == SurfaceMode.TERMINAL && mTerminalEndDrawerEnabled);
         return false;
     }
 
@@ -250,12 +260,13 @@ public final class MainSurfaceController {
 
     private void applyDrawerLockMode() {
         boolean terminalCanOpenStart = mMode == SurfaceMode.TERMINAL && !mTerminalCopyMode;
+        boolean terminalCanOpenEnd = mMode == SurfaceMode.TERMINAL && mTerminalEndDrawerEnabled && !mTerminalCopyMode;
         boolean displayCanOpenEnd = mMode == SurfaceMode.DISPLAY;
         mDrawerLayout.setDrawerLockMode(
             terminalCanOpenStart ? DrawerLayout.LOCK_MODE_UNLOCKED : DrawerLayout.LOCK_MODE_LOCKED_CLOSED,
             GravityCompat.START);
         mDrawerLayout.setDrawerLockMode(
-            displayCanOpenEnd ? DrawerLayout.LOCK_MODE_UNLOCKED : DrawerLayout.LOCK_MODE_LOCKED_CLOSED,
+            (terminalCanOpenEnd || displayCanOpenEnd) ? DrawerLayout.LOCK_MODE_UNLOCKED : DrawerLayout.LOCK_MODE_LOCKED_CLOSED,
             GravityCompat.END);
     }
 
