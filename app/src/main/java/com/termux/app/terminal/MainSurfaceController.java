@@ -2,8 +2,10 @@ package com.termux.app.terminal;
 
 import android.os.Handler;
 import android.os.Looper;
+import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.ViewConfiguration;
 import android.widget.FrameLayout;
 
 import androidx.annotation.NonNull;
@@ -16,6 +18,8 @@ import com.termux.x11.TermuxScreenView;
 
 public final class MainSurfaceController {
     private static final long DISPLAY_START_DRAWER_UNLOCK_TIMEOUT_MS = 5000;
+    private static final int INTERNAL_DRAWER_EDGE_INSET_DP = 24;
+    private static final int INTERNAL_DRAWER_HOT_ZONE_WIDTH_DP = 72;
 
     public enum SurfaceMode {
         TERMINAL,
@@ -34,6 +38,12 @@ public final class MainSurfaceController {
     private SurfaceMode mMode = SurfaceMode.TERMINAL;
     private boolean mTerminalCopyMode;
     private boolean mDisplayStartDrawerGestureUnlocked;
+    private int mTrackingInternalDrawerGravity;
+    private float mInternalDrawerSwipeDownX;
+    private float mInternalDrawerSwipeDownY;
+    private final int mInternalDrawerEdgeInset;
+    private final int mInternalDrawerHotZoneWidth;
+    private final int mInternalDrawerMinDistanceFloor;
     @Nullable
     private DrawerLayout.DrawerListener mRestoreLockModeOnCloseListener;
     @NonNull
@@ -47,6 +57,13 @@ public final class MainSurfaceController {
         mDrawerLayout = drawerLayout;
         mContainer = container;
         mTerminalView = terminalView;
+
+        float density = container.getResources().getDisplayMetrics().density;
+        ViewConfiguration viewConfiguration = ViewConfiguration.get(container.getContext());
+        mInternalDrawerEdgeInset = Math.round(INTERNAL_DRAWER_EDGE_INSET_DP * density);
+        mInternalDrawerHotZoneWidth = Math.round(INTERNAL_DRAWER_HOT_ZONE_WIDTH_DP * density);
+        mInternalDrawerMinDistanceFloor = viewConfiguration.getScaledTouchSlop() * 4;
+
         applyMode();
     }
 
@@ -109,6 +126,11 @@ public final class MainSurfaceController {
         mDrawerLayout.openDrawer(GravityCompat.START);
     }
 
+    public void openEndDrawerExplicitly() {
+        mDrawerLayout.setDrawerLockMode(DrawerLayout.LOCK_MODE_UNLOCKED, GravityCompat.END);
+        mDrawerLayout.openDrawer(GravityCompat.END);
+    }
+
     public void toggleStartDrawerExplicitly() {
         if (mDrawerLayout.isDrawerOpen(GravityCompat.START))
             mDrawerLayout.closeDrawer(GravityCompat.START);
@@ -133,6 +155,35 @@ public final class MainSurfaceController {
         mHandler.postDelayed(mLockDisplayStartDrawerGestureRunnable, DISPLAY_START_DRAWER_UNLOCK_TIMEOUT_MS);
     }
 
+    public void handleInternalDrawerSwipe(@NonNull MotionEvent event) {
+        switch (event.getActionMasked()) {
+            case MotionEvent.ACTION_DOWN:
+                mTrackingInternalDrawerGravity = getInternalDrawerSwipeGravity(event);
+                mInternalDrawerSwipeDownX = event.getRawX();
+                mInternalDrawerSwipeDownY = event.getRawY();
+                break;
+            case MotionEvent.ACTION_POINTER_DOWN:
+            case MotionEvent.ACTION_CANCEL:
+                mTrackingInternalDrawerGravity = 0;
+                break;
+            case MotionEvent.ACTION_MOVE:
+            case MotionEvent.ACTION_UP:
+                if (mTrackingInternalDrawerGravity == 0)
+                    return;
+                if (shouldOpenDrawerFromInternalSwipe(event, mTrackingInternalDrawerGravity)) {
+                    int drawerGravity = mTrackingInternalDrawerGravity;
+                    mTrackingInternalDrawerGravity = 0;
+                    if (drawerGravity == GravityCompat.START)
+                        openStartDrawerExplicitly();
+                    else
+                        openEndDrawerExplicitly();
+                } else if (event.getActionMasked() == MotionEvent.ACTION_UP) {
+                    mTrackingInternalDrawerGravity = 0;
+                }
+                break;
+        }
+    }
+
     private void applyMode() {
         if (mMode != SurfaceMode.DISPLAY)
             setDisplayStartDrawerGestureUnlocked(false);
@@ -140,6 +191,65 @@ public final class MainSurfaceController {
         if (mDisplayView != null)
             mDisplayView.setVisibility(mMode == SurfaceMode.DISPLAY ? View.VISIBLE : View.GONE);
         applyDrawerLockMode();
+    }
+
+    private boolean canOpenDrawerFromInternalSwipe(int drawerGravity) {
+        if (mDrawerLayout.isDrawerOpen(GravityCompat.START) || mDrawerLayout.isDrawerOpen(GravityCompat.END))
+            return false;
+        if (mTerminalCopyMode)
+            return false;
+        if (drawerGravity == GravityCompat.START)
+            return mMode == SurfaceMode.TERMINAL || mDisplayStartDrawerGestureUnlocked;
+        return true;
+    }
+
+    private boolean isTouchInsideContainer(@NonNull MotionEvent event) {
+        int[] location = new int[2];
+        mContainer.getLocationOnScreen(location);
+        float x = event.getRawX();
+        float y = event.getRawY();
+        return x >= location[0]
+            && x <= location[0] + mContainer.getWidth()
+            && y >= location[1]
+            && y <= location[1] + mContainer.getHeight();
+    }
+
+    private int getInternalDrawerSwipeGravity(@NonNull MotionEvent event) {
+        if (!isTouchInsideContainer(event))
+            return 0;
+        if (canOpenDrawerFromInternalSwipe(GravityCompat.START) && isInInternalDrawerHotZone(event, GravityCompat.START))
+            return GravityCompat.START;
+        if (canOpenDrawerFromInternalSwipe(GravityCompat.END) && isInInternalDrawerHotZone(event, GravityCompat.END))
+            return GravityCompat.END;
+        return 0;
+    }
+
+    private boolean isInInternalDrawerHotZone(@NonNull MotionEvent event, int drawerGravity) {
+        int[] location = new int[2];
+        mContainer.getLocationOnScreen(location);
+        float x = event.getRawX() - location[0];
+        int width = mContainer.getWidth();
+        boolean rtl = mContainer.getLayoutDirection() == View.LAYOUT_DIRECTION_RTL;
+        boolean useRightEdge = (drawerGravity == GravityCompat.START && rtl) || (drawerGravity == GravityCompat.END && !rtl);
+
+        if (useRightEdge)
+            return x <= width - mInternalDrawerEdgeInset
+                && x >= width - mInternalDrawerEdgeInset - mInternalDrawerHotZoneWidth;
+
+        return x >= mInternalDrawerEdgeInset
+            && x <= mInternalDrawerEdgeInset + mInternalDrawerHotZoneWidth;
+    }
+
+    private boolean shouldOpenDrawerFromInternalSwipe(@NonNull MotionEvent event, int drawerGravity) {
+        boolean rtl = mContainer.getLayoutDirection() == View.LAYOUT_DIRECTION_RTL;
+        boolean opensFromRight = (drawerGravity == GravityCompat.START && rtl) || (drawerGravity == GravityCompat.END && !rtl);
+        float inwardDistance = opensFromRight
+            ? mInternalDrawerSwipeDownX - event.getRawX()
+            : event.getRawX() - mInternalDrawerSwipeDownX;
+        float verticalDistance = Math.abs(event.getRawY() - mInternalDrawerSwipeDownY);
+        int minDistance = Math.max(mInternalDrawerMinDistanceFloor, mContainer.getWidth() / 3);
+        return inwardDistance >= minDistance
+            && inwardDistance > verticalDistance * 1.25f;
     }
 
     private void applyDrawerLockMode() {

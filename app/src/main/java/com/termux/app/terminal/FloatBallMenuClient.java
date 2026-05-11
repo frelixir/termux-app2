@@ -314,7 +314,6 @@ public class FloatBallMenuClient {
     }
 
     private void startCpuLoadIconUpdater() {
-        mCpuLoadSampler.reset();
         mLastCpuUsagePercent = -1;
         mHandler.removeCallbacks(mCpuLoadIconUpdater);
         mCpuLoadIconUpdater.run();
@@ -349,57 +348,52 @@ public class FloatBallMenuClient {
     }
 
     private static final class CpuLoadSampler {
-        private long lastIdle = -1;
-        private long lastTotal = -1;
-
-        void reset() {
-            lastIdle = -1;
-            lastTotal = -1;
-        }
-
         int sampleUsagePercent() {
-            long[] cpuTimes = readCpuTimes();
-            if (cpuTimes == null)
+            int numProcessors = Runtime.getRuntime().availableProcessors();
+            if (numProcessors <= 0)
                 return 0;
 
-            long idle = cpuTimes[0];
-            long total = cpuTimes[1];
-            if (lastTotal < 0) {
-                lastIdle = idle;
-                lastTotal = total;
-                return 0;
+            float totalRatio = 0;
+            int sampledProcessors = 0;
+            for (int i = 0; i < numProcessors; i++) {
+                long maxFreq = readLong(
+                    "/sys/devices/system/cpu/cpu" + i + "/cpufreq/cpuinfo_max_freq",
+                    "/sys/devices/system/cpu/cpu" + i + "/cpufreq/scaling_max_freq");
+                if (maxFreq <= 0)
+                    continue;
+
+                long minFreq = readLong(
+                    "/sys/devices/system/cpu/cpu" + i + "/cpufreq/scaling_min_freq",
+                    "/sys/devices/system/cpu/cpu" + i + "/cpufreq/cpuinfo_min_freq");
+                long currentFreq = readLong(
+                    "/sys/devices/system/cpu/cpu" + i + "/cpufreq/scaling_cur_freq",
+                    "/sys/devices/system/cpu/cpu" + i + "/cpufreq/cpuinfo_cur_freq");
+                long availableFreqRange = maxFreq - minFreq;
+                float ratio = currentFreq > 0 && availableFreqRange > 0
+                    ? (currentFreq - minFreq) / (float) availableFreqRange
+                    : 0;
+                ratio = Math.max(0, Math.min(1.0f, ratio));
+                totalRatio += ratio;
+                sampledProcessors++;
             }
 
-            long idleDelta = idle - lastIdle;
-            long totalDelta = total - lastTotal;
-            lastIdle = idle;
-            lastTotal = total;
-            if (totalDelta <= 0)
+            if (sampledProcessors <= 0)
                 return 0;
 
-            int usagePercent = (int) (((totalDelta - idleDelta) * 100) / totalDelta);
-            return Math.max(0, Math.min(100, usagePercent));
+            return Math.max(0, Math.min(100, Math.round((totalRatio / sampledProcessors) * 100)));
         }
 
-        private long[] readCpuTimes() {
-            try (BufferedReader reader = new BufferedReader(new FileReader("/proc/stat"))) {
-                String line = reader.readLine();
-                if (line == null || !line.startsWith("cpu "))
-                    return null;
-
-                String[] values = line.trim().split("\\s+");
-                long idle = parseLong(values, 4) + parseLong(values, 5);
-                long total = 0;
-                for (int i = 1; i < values.length; i++)
-                    total += Long.parseLong(values[i]);
-                return new long[]{idle, total};
-            } catch (IOException | NumberFormatException e) {
-                return null;
+        private long readLong(String... paths) {
+            for (String path : paths) {
+                try (BufferedReader reader = new BufferedReader(new FileReader(path))) {
+                    String line = reader.readLine();
+                    if (line != null)
+                        return Long.parseLong(line.trim());
+                } catch (IOException | NumberFormatException e) {
+                    // Try the next kernel-exposed cpufreq path.
+                }
             }
-        }
-
-        private long parseLong(String[] values, int index) {
-            return index < values.length ? Long.parseLong(values[index]) : 0;
+            return 0;
         }
     }
 

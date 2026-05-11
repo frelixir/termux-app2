@@ -4,6 +4,7 @@ import android.content.Context;
 import android.graphics.Rect;
 import android.inputmethodservice.InputMethodService;
 import android.util.AttributeSet;
+import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.ViewTreeObserver;
@@ -97,6 +98,13 @@ public class TermuxActivityRootView extends LinearLayout implements ViewTreeObse
      */
     public void setIsRootViewLoggingEnabled(boolean value) {
         ROOT_VIEW_LOGGING_ENABLED = value;
+    }
+
+    @Override
+    public boolean dispatchTouchEvent(MotionEvent event) {
+        if (mActivity != null && mActivity.getMainSurfaceController() != null)
+            mActivity.getMainSurfaceController().handleInternalDrawerSwipe(event);
+        return super.dispatchTouchEvent(event);
     }
 
     @Override

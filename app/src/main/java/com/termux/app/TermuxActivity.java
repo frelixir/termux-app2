@@ -217,7 +217,9 @@ public class TermuxActivity extends AppCompatActivity implements ServiceConnecti
 
     private float mTerminalToolbarDefaultHeight;
     private MenuEntryClient mMenuEntryClient;
-    private boolean isExit;
+    private boolean mPendingTerminalExit;
+    private boolean mPendingTerminalMoveToBack;
+    private boolean mPendingDisplayReturnToTerminal;
 
     private static final int CONTEXT_MENU_SELECT_URL_ID = 0;
     private static final int CONTEXT_MENU_SHARE_TRANSCRIPT_ID = 1;
@@ -374,6 +376,7 @@ public class TermuxActivity extends AppCompatActivity implements ServiceConnecti
     }
 
     public void showTerminalSurface() {
+        mPendingDisplayReturnToTerminal = false;
         if (mMainSurfaceController != null) {
             mMainSurfaceController.showTerminal();
             updateTerminalToolbarVisibilityForSurface();
@@ -381,6 +384,8 @@ public class TermuxActivity extends AppCompatActivity implements ServiceConnecti
     }
 
     public void showDisplaySurface() {
+        mPendingTerminalExit = false;
+        mPendingTerminalMoveToBack = false;
         if (mMainSurfaceController != null) {
             mMainSurfaceController.showDisplay();
             if (mMainSurfaceController.isDisplayMode()) {
@@ -626,7 +631,7 @@ public class TermuxActivity extends AppCompatActivity implements ServiceConnecti
 
             @Override
             public void onExitApp() {
-                TermuxActivity.this.unlockOrExitApp();
+                TermuxActivity.this.returnToTerminalOrPrompt();
             }
         });
     }
@@ -892,28 +897,44 @@ public class TermuxActivity extends AppCompatActivity implements ServiceConnecti
     }
 
     private void exitApp() {
-        if (isExit) {
+        if (mPendingTerminalExit) {
+            mPendingTerminalExit = false;
             Intent exitIntent = new Intent(this, TermuxService.class)
                 .setAction(TermuxConstants.TERMUX_APP.TERMUX_SERVICE.ACTION_STOP_SERVICE);
             startService(exitIntent);
             finishActivityIfNotFinishing();
         } else {
             Toast.makeText(this, R.string.exit_toast_text, Toast.LENGTH_SHORT).show();
-            isExit = true;
-            LoriePreferences.handler.postDelayed(() -> isExit = false, 2000);
+            mPendingTerminalExit = true;
+            mPendingTerminalMoveToBack = false;
+            mPendingDisplayReturnToTerminal = false;
+            LoriePreferences.handler.postDelayed(() -> mPendingTerminalExit = false, 2000);
         }
     }
 
-    private void unlockOrExitApp() {
-        if (isExit) {
-            Intent exitIntent = new Intent(this, TermuxService.class)
-                .setAction(TermuxConstants.TERMUX_APP.TERMUX_SERVICE.ACTION_STOP_SERVICE);
-            startService(exitIntent);
-            finishActivityIfNotFinishing();
+    private void moveTaskToBackOrPrompt() {
+        if (mPendingTerminalMoveToBack) {
+            mPendingTerminalMoveToBack = false;
+            moveTaskToBack(true);
+        } else {
+            Toast.makeText(this, R.string.return_home_toast_text, Toast.LENGTH_SHORT).show();
+            mPendingTerminalMoveToBack = true;
+            mPendingTerminalExit = false;
+            mPendingDisplayReturnToTerminal = false;
+            LoriePreferences.handler.postDelayed(() -> mPendingTerminalMoveToBack = false, 2000);
+        }
+    }
+
+    private void returnToTerminalOrPrompt() {
+        if (mPendingDisplayReturnToTerminal) {
+            mPendingDisplayReturnToTerminal = false;
+            showTerminalSurface();
         } else {
             Toast.makeText(this, R.string.unlock_exit_toast_text, Toast.LENGTH_SHORT).show();
-            isExit = true;
-            LoriePreferences.handler.postDelayed(() -> isExit = false, 2000);
+            mPendingDisplayReturnToTerminal = true;
+            mPendingTerminalExit = false;
+            mPendingTerminalMoveToBack = false;
+            LoriePreferences.handler.postDelayed(() -> mPendingDisplayReturnToTerminal = false, 2000);
         }
     }
 
@@ -1117,6 +1138,8 @@ public class TermuxActivity extends AppCompatActivity implements ServiceConnecti
             getDrawer().closeDrawers();
         } else if (getDrawer().isDrawerOpen(GravityCompat.END)) {
             navigateX11PreferencesBack();
+        } else if (!isDisplaySurfaceMode()) {
+            moveTaskToBackOrPrompt();
         } else {
 //            finishActivityIfNotFinishing();
             if (!getLorieViewRuntime().isX11FloatBallMenuEnabled() || mFloatBallMenuClient == null) {
