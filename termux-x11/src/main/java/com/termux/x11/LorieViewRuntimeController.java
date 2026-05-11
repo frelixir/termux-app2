@@ -296,11 +296,24 @@ public final class LorieViewRuntimeController implements LorieViewRuntimeApi.Lor
                 mExtraKeys.unsetSpecialKeys();
             return result;
         };
-        View.OnTouchListener lorieTouchListener =
-            (v, event) -> mX11InputController.handleTouchEvent(lorieParent, lorieView, event);
+        View.OnTouchListener lorieTouchListener = (v, event) -> {
+            MotionEvent x11Event = MotionEvent.obtain(event);
+            try {
+                return mX11InputController.handleTouchEvent(lorieParent, lorieView, x11Event);
+            } finally {
+                x11Event.recycle();
+            }
+        };
         lorieParent.setOnTouchListener(lorieTouchListener);
         lorieView.setOnTouchListener(lorieTouchListener);
-        lorieView.setOnHoverListener((v, e) -> mX11InputController.handleTouchEvent(lorieParent, lorieView, e));
+        lorieView.setOnHoverListener((v, e) -> {
+            MotionEvent x11Event = MotionEvent.obtain(e);
+            try {
+                return mX11InputController.handleTouchEvent(lorieParent, lorieView, x11Event);
+            } finally {
+                x11Event.recycle();
+            }
+        });
         lorieView.setOnKeyListener(mLorieKeyListener);
 
         lorieView.setCallback((surfaceWidth, surfaceHeight, screenWidth, screenHeight) -> {

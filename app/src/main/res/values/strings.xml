@@ -224,7 +224,7 @@
     <string name="apply_display_over_other_app_permission">apply display over other permission first</string>
     <string name="open_terminal">open terminal</string>
     <string name="terminate_current_process">kill the termux-x11 process</string>
-    <string name="unlock_layout">unlock screen slider</string>
+    <string name="unlock_layout">open side panel</string>
     <string name="raise_termux_app">raise termux app</string>
     <string name="add_menu_item">add some item to float ball menu</string>
     <string name="hide_terminal">hide terminal</string>

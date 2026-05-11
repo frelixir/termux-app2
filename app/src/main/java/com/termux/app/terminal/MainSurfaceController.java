@@ -1,7 +1,5 @@
 package com.termux.app.terminal;
 
-import android.os.Handler;
-import android.os.Looper;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
@@ -17,9 +15,11 @@ import com.termux.view.TerminalView;
 import com.termux.x11.TermuxScreenView;
 
 public final class MainSurfaceController {
-    private static final long DISPLAY_START_DRAWER_UNLOCK_TIMEOUT_MS = 5000;
     private static final int INTERNAL_DRAWER_EDGE_INSET_DP = 24;
     private static final int INTERNAL_DRAWER_HOT_ZONE_WIDTH_DP = 72;
+    private static final int INTERNAL_DRAWER_MIN_DISTANCE_DP = 96;
+    private static final int INTERNAL_DRAWER_MAX_DISTANCE_DP = 220;
+    private static final float INTERNAL_DRAWER_SHORT_SIDE_DISTANCE_RATIO = 0.24f;
 
     public enum SurfaceMode {
         TERMINAL,
@@ -37,19 +37,15 @@ public final class MainSurfaceController {
     @NonNull
     private SurfaceMode mMode = SurfaceMode.TERMINAL;
     private boolean mTerminalCopyMode;
-    private boolean mDisplayStartDrawerGestureUnlocked;
     private int mTrackingInternalDrawerGravity;
     private float mInternalDrawerSwipeDownX;
     private float mInternalDrawerSwipeDownY;
     private final int mInternalDrawerEdgeInset;
     private final int mInternalDrawerHotZoneWidth;
-    private final int mInternalDrawerMinDistanceFloor;
+    private final int mInternalDrawerMinDistance;
+    private final int mInternalDrawerMaxDistance;
     @Nullable
     private DrawerLayout.DrawerListener mRestoreLockModeOnCloseListener;
-    @NonNull
-    private final Handler mHandler = new Handler(Looper.getMainLooper());
-    @NonNull
-    private final Runnable mLockDisplayStartDrawerGestureRunnable = this::lockDisplayStartDrawerGesture;
 
     public MainSurfaceController(@NonNull DrawerLayout drawerLayout,
                                  @NonNull FrameLayout container,
@@ -62,7 +58,10 @@ public final class MainSurfaceController {
         ViewConfiguration viewConfiguration = ViewConfiguration.get(container.getContext());
         mInternalDrawerEdgeInset = Math.round(INTERNAL_DRAWER_EDGE_INSET_DP * density);
         mInternalDrawerHotZoneWidth = Math.round(INTERNAL_DRAWER_HOT_ZONE_WIDTH_DP * density);
-        mInternalDrawerMinDistanceFloor = viewConfiguration.getScaledTouchSlop() * 4;
+        mInternalDrawerMinDistance = Math.max(
+            Math.round(INTERNAL_DRAWER_MIN_DISTANCE_DP * density),
+            viewConfiguration.getScaledTouchSlop() * 4);
+        mInternalDrawerMaxDistance = Math.round(INTERNAL_DRAWER_MAX_DISTANCE_DP * density);
 
         applyMode();
     }
@@ -120,7 +119,6 @@ public final class MainSurfaceController {
     }
 
     public void openStartDrawerExplicitly() {
-        mHandler.removeCallbacks(mLockDisplayStartDrawerGestureRunnable);
         mDrawerLayout.setDrawerLockMode(DrawerLayout.LOCK_MODE_UNLOCKED, GravityCompat.START);
         ensureRestoreLockModeOnCloseListener();
         mDrawerLayout.openDrawer(GravityCompat.START);
@@ -139,20 +137,15 @@ public final class MainSurfaceController {
     }
 
     public void restoreDrawerLockMode() {
-        setDisplayStartDrawerGestureUnlocked(false);
-        mHandler.removeCallbacks(mLockDisplayStartDrawerGestureRunnable);
         applyDrawerLockMode();
     }
 
-    public void unlockDisplayStartDrawerGestureTemporarily() {
-        if (mMode != SurfaceMode.DISPLAY || mDisplayView == null)
-            return;
-
-        setDisplayStartDrawerGestureUnlocked(true);
-        applyDrawerLockMode();
-        ensureRestoreLockModeOnCloseListener();
-        mHandler.removeCallbacks(mLockDisplayStartDrawerGestureRunnable);
-        mHandler.postDelayed(mLockDisplayStartDrawerGestureRunnable, DISPLAY_START_DRAWER_UNLOCK_TIMEOUT_MS);
+    public void openCurrentSurfaceDrawerExplicitly() {
+        if (mMode == SurfaceMode.TERMINAL) {
+            openStartDrawerExplicitly();
+        } else if (mMode == SurfaceMode.DISPLAY && mDisplayView != null) {
+            openEndDrawerExplicitly();
+        }
     }
 
     public void handleInternalDrawerSwipe(@NonNull MotionEvent event) {
@@ -185,8 +178,6 @@ public final class MainSurfaceController {
     }
 
     private void applyMode() {
-        if (mMode != SurfaceMode.DISPLAY)
-            setDisplayStartDrawerGestureUnlocked(false);
         mTerminalView.setVisibility(mMode == SurfaceMode.TERMINAL ? View.VISIBLE : View.GONE);
         if (mDisplayView != null)
             mDisplayView.setVisibility(mMode == SurfaceMode.DISPLAY ? View.VISIBLE : View.GONE);
@@ -199,8 +190,10 @@ public final class MainSurfaceController {
         if (mTerminalCopyMode)
             return false;
         if (drawerGravity == GravityCompat.START)
-            return mMode == SurfaceMode.TERMINAL || mDisplayStartDrawerGestureUnlocked;
-        return true;
+            return mMode == SurfaceMode.TERMINAL;
+        if (drawerGravity == GravityCompat.END)
+            return mMode == SurfaceMode.DISPLAY;
+        return false;
     }
 
     private boolean isTouchInsideContainer(@NonNull MotionEvent event) {
@@ -247,36 +240,23 @@ public final class MainSurfaceController {
             ? mInternalDrawerSwipeDownX - event.getRawX()
             : event.getRawX() - mInternalDrawerSwipeDownX;
         float verticalDistance = Math.abs(event.getRawY() - mInternalDrawerSwipeDownY);
-        int minDistance = Math.max(mInternalDrawerMinDistanceFloor, mContainer.getWidth() / 3);
+        int shortSide = Math.min(mContainer.getWidth(), mContainer.getHeight());
+        int minDistance = Math.max(
+            mInternalDrawerMinDistance,
+            Math.min(Math.round(shortSide * INTERNAL_DRAWER_SHORT_SIDE_DISTANCE_RATIO), mInternalDrawerMaxDistance));
         return inwardDistance >= minDistance
             && inwardDistance > verticalDistance * 1.25f;
     }
 
     private void applyDrawerLockMode() {
-        int lockMode = mDisplayStartDrawerGestureUnlocked
-            ? DrawerLayout.LOCK_MODE_UNLOCKED
-            : (mMode == SurfaceMode.DISPLAY || mTerminalCopyMode)
-            ? DrawerLayout.LOCK_MODE_LOCKED_CLOSED
-            : DrawerLayout.LOCK_MODE_UNLOCKED;
-        mDrawerLayout.setDrawerLockMode(lockMode, GravityCompat.START);
-    }
-
-    private void lockDisplayStartDrawerGesture() {
-        setDisplayStartDrawerGestureUnlocked(false);
-        if (mDrawerLayout.isDrawerOpen(GravityCompat.START))
-            return;
-
-        if (mRestoreLockModeOnCloseListener != null) {
-            mDrawerLayout.removeDrawerListener(mRestoreLockModeOnCloseListener);
-            mRestoreLockModeOnCloseListener = null;
-        }
-        applyDrawerLockMode();
-    }
-
-    private void setDisplayStartDrawerGestureUnlocked(boolean unlocked) {
-        mDisplayStartDrawerGestureUnlocked = unlocked && mMode == SurfaceMode.DISPLAY && mDisplayView != null;
-        if (mDisplayView != null)
-            mDisplayView.setStartDrawerGestureUnlocked(mDisplayStartDrawerGestureUnlocked);
+        boolean terminalCanOpenStart = mMode == SurfaceMode.TERMINAL && !mTerminalCopyMode;
+        boolean displayCanOpenEnd = mMode == SurfaceMode.DISPLAY;
+        mDrawerLayout.setDrawerLockMode(
+            terminalCanOpenStart ? DrawerLayout.LOCK_MODE_UNLOCKED : DrawerLayout.LOCK_MODE_LOCKED_CLOSED,
+            GravityCompat.START);
+        mDrawerLayout.setDrawerLockMode(
+            displayCanOpenEnd ? DrawerLayout.LOCK_MODE_UNLOCKED : DrawerLayout.LOCK_MODE_LOCKED_CLOSED,
+            GravityCompat.END);
     }
 
     private void ensureRestoreLockModeOnCloseListener() {

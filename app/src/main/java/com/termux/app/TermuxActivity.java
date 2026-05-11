@@ -507,6 +507,8 @@ public class TermuxActivity extends AppCompatActivity implements ServiceConnecti
 
             @Override
             public void releaseSlider(boolean open) {
+                if (mMainSurfaceController != null && !mMainSurfaceController.isDisplayMode())
+                    return;
                 if (!TermuxActivity.this.getLorieViewRuntime().isX11FloatBallMenuEnabled()
                     || TermuxActivity.this.mFloatBallMenuClient == null) {
                     getDrawer().setDrawerLockMode(open ? DrawerLayout.LOCK_MODE_UNLOCKED : DrawerLayout.LOCK_MODE_LOCKED_CLOSED, GravityCompat.END);
@@ -985,7 +987,6 @@ public class TermuxActivity extends AppCompatActivity implements ServiceConnecti
             findViewById(R.id.main_surface_container),
             mTerminalView);
         TermuxScreenView termuxScreenView = new TermuxScreenView(this);
-        termuxScreenView.setStartDrawerGestureListener(this::openStartDrawerExplicitly);
         mMainSurfaceController.attachDisplayView(termuxScreenView);
         getLorieViewRuntime().attachTermuxScreenView(termuxScreenView);
         getLorieViewRuntime().setX11ConnectionStateListener(connected -> {

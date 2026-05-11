@@ -244,7 +244,7 @@ public class FloatBallMenuClient {
             public void action() {
                 MainSurfaceController surfaceController = mTermuxActivity.getMainSurfaceController();
                 if (surfaceController != null)
-                    surfaceController.unlockDisplayStartDrawerGestureTemporarily();
+                    surfaceController.openCurrentSurfaceDrawerExplicitly();
                 toast(mTermuxActivity.getString(R.string.unlock_layout));
                 mFloatballManager.closeMenu();
             }
