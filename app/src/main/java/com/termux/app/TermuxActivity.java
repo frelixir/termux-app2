@@ -369,7 +369,6 @@ public class TermuxActivity extends com.termux.x11.MainActivity implements Servi
         setX11Server();
         setBackupView();
         setFloatBallMenuClient();
-        mMainContentView.post(() -> mMainContentView.showContent());
 
 
         try {
