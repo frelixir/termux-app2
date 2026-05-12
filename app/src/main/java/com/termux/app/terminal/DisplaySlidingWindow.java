@@ -309,12 +309,15 @@ public class DisplaySlidingWindow extends HorizontalScrollView {
     public void showContent() {
         this.mLockContentSlider = false;
         this.mMenuSwitchSlider = false;
+        mContentType = ContentType.CENTER_CONTENT;
+        mIsLeftMenuOpen = false;
+        mIsRightMenuOpen = false;
         mRefreshEnd = false;
         remeasure();
         this.smoothScrollTo(mMenuWidth, 0);
         if (mOnMenuChangeListener != null) {
-            mOnMenuChangeListener.onMenuOpen(true, 1);
-            mContentType = ContentType.CENTER_CONTENT;
+            mOnMenuChangeListener.onMenuOpen(false, 0);
+            mOnMenuChangeListener.onMenuOpen(false, 1);
         }
     }
 
